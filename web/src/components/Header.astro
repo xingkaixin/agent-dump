@@ -10,8 +10,15 @@ interface Props {
   paths?: Partial<Record<Locale, string>>;
   homeLinks?: boolean;
   current?: "guides";
+  overlay?: boolean;
 }
-const { locale, paths = site.paths, homeLinks = false, current } = Astro.props;
+const {
+  locale,
+  paths = site.paths,
+  homeLinks = false,
+  current,
+  overlay = false,
+} = Astro.props;
 const home = homeLinks ? site.paths[locale] : "";
 const t = ui[locale];
 const l = landing[locale];
@@ -28,7 +35,7 @@ const links = [
 ];
 ---
 
-<header class="hdr">
+<header class:list={["hdr", overlay && "hdr-overlay"]}>
   <div class="wrap hdr-in">
     <a href={site.paths[locale]} class="brand" aria-label="agent-dump">
       <Logo size={30} />
@@ -119,6 +126,14 @@ const links = [
 </header>
 
 <script is:inline>
+  var overlayHdr = document.querySelector(".hdr-overlay");
+  if (overlayHdr) {
+    var syncHdr = function () {
+      overlayHdr.classList.toggle("scrolled", window.scrollY > 12);
+    };
+    syncHdr();
+    window.addEventListener("scroll", syncHdr, { passive: true });
+  }
   document.querySelectorAll(".mobile-menu").forEach(function (menu) {
     menu.addEventListener("click", function (event) {
       if (event.target.closest("a")) menu.open = false;

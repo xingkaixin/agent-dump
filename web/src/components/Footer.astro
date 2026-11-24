@@ -1,6 +1,10 @@
 ---
-import { guideIndexPaths, guideUi } from "../lib/guides";
+import footerBgAvif from "../assets/footer-bg.avif?url";
+import footerBgWebp from "../assets/footer-bg.webp?url";
+import { codexGuidePaths, guideIndexPaths, guideUi } from "../lib/guides";
 import { site, ui, type Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
+import { version } from "../lib/version";
 import Logo from "./Logo.astro";
 
 interface Props {
@@ -8,42 +12,164 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
+const l = landing[locale];
+const home = site.paths[locale];
+const brewCmd = "brew install xingkaixin/tap/agent-dump";
 
-const links = [
+const claudeGuidePath =
+  locale === "zh"
+    ? "/zh/guides/export-claude-code-conversations/"
+    : locale === "ja"
+      ? "/ja/guides/export-claude-code-conversations/"
+      : "/guides/export-claude-code-conversations/";
+const handoffGuidePath =
+  locale === "zh"
+    ? "/zh/guides/handoff-context-to-ai-agent/"
+    : "/guides/handoff-context-to-ai-agent/";
+
+const outbound = [
   { label: t.footerGithub, href: site.repo, rel: "noopener noreferrer" },
   { label: "npm", href: site.npm, rel: "noopener noreferrer" },
   { label: "PyPI", href: site.pypi, rel: "noopener noreferrer" },
-  { label: t.changelogLabel, href: site.changelogUrl[locale], rel: "noopener noreferrer" },
   { label: t.footerBlog, href: site.blogUrl[locale], rel: "noopener" },
 ];
 ---
 
 <footer class="ftr">
-  <div class="wrap">
-    <div class="ftr-in">
-      <div>
-        <a class="brand" href={site.paths[locale]}>
-          <Logo size={24} />
-          agent-dump
+  <picture class="ftr-bg" aria-hidden="true">
+    <source srcset={footerBgAvif} type="image/avif" />
+    <img
+      src={footerBgWebp}
+      alt=""
+      width="1664"
+      height="936"
+      loading="lazy"
+      decoding="async"
+    />
+  </picture>
+
+  <div class="wrap ftr-shell">
+    <div class="ftr-top">
+      <div class="ftr-brand-col">
+        <a class="brand ftr-brand" href={home}>
+          <Logo size={28} />
+          <span>agent-dump</span>
         </a>
-        <p class="tg">{t.footerTagline}</p>
-      </div>
-      <nav aria-label="Footer" class="fnav">
-        <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
-        {links.map((link) => (
-          <a
-            href={link.href}
-            target="_blank"
-            rel={link.rel}
-            data-umami-event="outbound-click"
-            data-umami-event-destination={link.label}
-            data-umami-event-locale={t.htmlLang}
+        <p class="ftr-desc">{t.footerTagline}</p>
+        <div class="ftr-install">
+          <span class="ftr-sig" aria-hidden="true">$</span>
+          <code>{brewCmd}</code>
+          <button
+            type="button"
+            class="ftr-copy"
+            data-quick-copy={brewCmd}
+            data-install-method="Homebrew"
+            data-copy-label={t.copy}
+            data-copied-label={t.copied}
+            aria-label={t.copy}
           >
-            {link.label}
-          </a>
-        ))}
+            {t.copy}
+          </button>
+          <span role="status" aria-live="polite" class="sr-only" data-copy-status></span>
+        </div>
+      </div>
+
+      <nav aria-label="Footer" class="ftr-cols">
+        <div class="ftr-col">
+          <h4>{l.footer.product}</h4>
+          <ul>
+            <li><a href={`${home}#providers`}>{l.footer.providers}</a></li>
+            <li><a href={`${home}#browse`}>{l.nav.browse}</a></li>
+            <li><a href={`${home}#install`}>{t.installHeading}</a></li>
+            <li>
+              <a
+                href={site.changelogUrl[locale]}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-umami-event="outbound-click"
+                data-umami-event-destination={t.changelogLabel}
+                data-umami-event-locale={t.htmlLang}
+              >
+                {t.changelogLabel}
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="ftr-col">
+          <h4>{l.footer.guides}</h4>
+          <ul>
+            <li><a href={guideIndexPaths[locale]}>{guideUi[locale].all}</a></li>
+            <li><a href={codexGuidePaths[locale]}>{l.footer.codexGuide}</a></li>
+            <li><a href={claudeGuidePath}>{l.footer.claudeGuide}</a></li>
+            <li><a href={handoffGuidePath}>{l.footer.handoffGuide}</a></li>
+          </ul>
+        </div>
+
+        <div class="ftr-col">
+          <h4>{l.footer.distribution}</h4>
+          <ul>
+            {outbound.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  target="_blank"
+                  rel={link.rel}
+                  data-umami-event="outbound-click"
+                  data-umami-event-destination={link.label}
+                  data-umami-event-locale={t.htmlLang}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       </nav>
     </div>
-    <p class="giant" aria-hidden="true"><b>$</b> agent-dump<i></i></p>
+
+    <div class="ftr-bottom">
+      <span>{l.footer.readOnlyNote}</span>
+      <span class="ftr-meta">v{version} · MIT · {site.author.name}</span>
+    </div>
   </div>
 </footer>
+
+<script>
+  import { copyText } from "../lib/clipboard";
+  import { trackEvent } from "../lib/analytics";
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".ftr-copy[data-quick-copy]")) {
+    if (btn.dataset.copyBound) continue;
+    btn.dataset.copyBound = "1";
+    let timer = 0;
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.quickCopy ?? "";
+      const copyLabel = btn.dataset.copyLabel ?? "Copy";
+      const copiedLabel = btn.dataset.copiedLabel ?? "Copied";
+      try {
+        if (!(await copyText(text))) return;
+        btn.textContent = copiedLabel;
+        btn.classList.add("ok");
+        btn.setAttribute("aria-label", copiedLabel);
+        const status = btn.nextElementSibling;
+        if (status?.hasAttribute("data-copy-status")) {
+          status.textContent = copiedLabel;
+        }
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          btn.textContent = copyLabel;
+          btn.classList.remove("ok");
+          btn.setAttribute("aria-label", copyLabel);
+          if (status?.hasAttribute("data-copy-status")) {
+            status.textContent = "";
+          }
+        }, 1600);
+        const method = btn.dataset.installMethod;
+        if (method) trackEvent("install-copy", { method });
+      } catch {
+        /* clipboard unavailable */
+      }
+    });
+  }
+</script>

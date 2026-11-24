@@ -13,10 +13,10 @@ pnpm build
 ```
 
 - `Base.astro` 预加载每个字体的 core 文件，URL 由构建生成，并使用 `crossorigin="anonymous"` 与字体请求保持一致。
-- `astro.config.mjs` 从生成的 HTML 提取样式表和字体预加载，写入 `dist/_headers` 的逐页面 `Link` 头。不要手写带 hash 的资源路径，也不要预加载首屏以下的图片或 React 组件。
+- `astro.config.mjs` 从生成的 HTML 提取样式表和字体预加载，写入 `dist/_headers` 的逐页面 `Link` 头。不要手写带 hash 的资源路径，也不要预加载首屏以下的图片。
 - 部署后检查 `/`、`/zh/`、`/ja/` 的 `Link` 头与资源 URL；`103` 是否发出受缓存和浏览器支持影响，不能只靠一次请求判断。
 - 保留 `public/_headers` 中 `/_astro/*` 的一年期 immutable 缓存。HTML 使用 Workers Static Assets 默认缓存策略，避免叠加 Cache Everything 后出现旧版本。
-- 首屏标题与优化后的 WebP 主视觉直接显示，不依赖 JavaScript 或 WebGL。动效遵循 `prefers-reduced-motion`。交互示例使用虚构会话，在浏览器内筛选和展示，不访问真实数据。
+- 首屏与页脚背景图通过 `<picture>` 同时提供 AVIF（优先）和 WebP（回退）；首屏标题与主视觉直接显示，不依赖 JavaScript 或 WebGL，页脚背景使用 `loading="lazy"`。动效遵循 `prefers-reduced-motion`。交互示例使用虚构会话，在浏览器内筛选和展示，不访问真实数据。
 - 使用说明保存在 `web/src/pages/guides/`、`web/src/pages/zh/guides/` 和 `web/src/pages/ja/guides/` 的 Markdown 文件中。frontmatter 的 `slug`、`locale`、`category`、`order`、`updated`、`title`、`description` 驱动目录、语言切换和文章元数据；相同内容的翻译共用 slug。保留既有文章 URL。
 - 新文章同步英文和中文，更新日期必须反映实际内容修改。日文目录优先展示已有日文翻译，未翻译文章回退到英文并明确标记。正文要包含适用场景、有效命令、输出与限制，并同步 `public/llms.txt`。文章渲染为静态 HTML；筛选仅作渐进增强。
 - `web/tests/e2e` 覆盖各语言安装命令、翻译跳转不落到 404、文章与内链可访问。
