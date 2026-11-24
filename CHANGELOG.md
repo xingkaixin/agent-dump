@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.2.13] - 2026-11-24
+
+### Changed
+
+- Reduce CLI latency, peak RSS, and release binary size without changing observable behavior: enable thin LTO, single codegen unit, and symbol stripping in the release profile (~21.5% smaller binary); replace DOM-heavy scans with a 64 KiB backward scanner for Codex recent sessions (up to ~83% lower peak RSS on large JSONL) and zero-DOM serde visitors for Codex and SQLite V2; batch FTS5 updates into a single transaction with `ByteBudget`-bounded concurrent reads; and stream JSON and Markdown exports directly through 64 KiB buffered writers. Paired benchmarks showed 1.5x–2.4x speedups across list, stats, search, export, and collect (#603).
+- Replace React interactive islands on the landing page with native Astro and vanilla TypeScript components, split landing CSS from guide CSS, and minify inline JSON-LD, cutting landing JavaScript transfer by ~96% and total transfer by ~55% (#603).
+- Add Japanese translations for the Codex and Claude Code export guides with partial-locale fallback, refine English guide SEO metadata, document normalized JSON export fields and `--format raw`, and add footer author blog links, `Person` JSON-LD metadata, and Chinese guide further-reading links (#601, #602).
+- Update Rust dependencies (`rusqlite` 0.43, `nix` 0.32, `jiff` 1.0.1, `regex` 1.13.2) (#598–#600).
+
 ## [1.2.12] - 2026-11-20
 
 ### Added
@@ -1445,3 +1454,4 @@
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
 [1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11
 [1.2.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.12
+[1.2.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.13
