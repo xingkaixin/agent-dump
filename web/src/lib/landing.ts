@@ -11,6 +11,30 @@ export type LandingCopy = {
     hits: string;
     untouched: string;
     handoff: string;
+    meta: string;
+    moreProviders: string;
+    written: string;
+    hitsList: {
+      uri: string;
+      loc: string;
+      age: string;
+      lead: string;
+      match: string;
+      tail: string;
+      file: string;
+      user: string;
+      assistant: string;
+    }[];
+  };
+  footer: {
+    product: string;
+    providers: string;
+    guides: string;
+    distribution: string;
+    codexGuide: string;
+    claudeGuide: string;
+    handoffGuide: string;
+    readOnlyNote: string;
   };
   sample: { s1: string; s2: string; s3: string; q1: string; q2: string };
   notes: { scan: string; chunk: string };
@@ -69,12 +93,60 @@ export const landing: Record<Locale, LandingCopy> = {
   en: {
     nav: { browse: "Browse", faq: "FAQ" },
     stage: {
-      sources: "Sources",
+      sources: "Discovered sources",
       sample: "agent-dump · sample output",
       output: "Output",
       hits: "3 sessions · 7 hits · locators kept",
-      untouched: "source untouched",
+      untouched: "Read-only · source untouched",
       handoff: "weekly.md handoff",
+      meta: "19 local providers · FTS5 index",
+      moreProviders: "13 more tools",
+      written: "Written to",
+      hitsList: [
+        {
+          uri: "codex://019a7c2e",
+          loc: "msg 3",
+          age: "2d ago",
+          lead: "Gateway timeout config: hold off on raising ",
+          match: "auth timeout",
+          tail: ", failures cluster around token refresh.",
+          file: "./sessions/codex/019a7c2e.md",
+          user: "Upstream returns 504 now and then. Raise auth timeout from 30s to 60s?",
+          assistant: "Not yet. Logs show timeouts cluster around token refresh. Reuse the HTTP pool and trace upstream latency first.",
+        },
+        {
+          uri: "claude://7f3c91",
+          loc: "msg 14",
+          age: "5d ago",
+          lead: "Fix login timeout retry: ",
+          match: "auth timeout",
+          tail: " triggers backoff after 30s; wire up cancellation context.",
+          file: "./sessions/claude/7f3c91.md",
+          user: "Login retries pile up when the auth upstream stalls past 30s.",
+          assistant: "Pass the request AbortSignal into the retry loop so canceled logins stop immediately after auth timeout.",
+        },
+        {
+          uri: "opencode://5c4b3a",
+          loc: "msg 1",
+          age: "9d ago",
+          lead: "Session refresh logic: compare upstream 504 logs against local ",
+          match: "auth timeout",
+          tail: " thresholds.",
+          file: "./sessions/opencode/5c4b3a.md",
+          user: "Can we check if local auth timeout is shorter than the gateway idle window?",
+          assistant: "Yes: client auth timeout is 30s while gateway refresh sits at 45s. Aligning both removes the spurious retries.",
+        },
+      ],
+    },
+    footer: {
+      product: "Product",
+      providers: "Supported tools",
+      guides: "Guides",
+      distribution: "Distribution",
+      codexGuide: "Export Codex sessions",
+      claudeGuide: "Export Claude Code",
+      handoffGuide: "Agent context handoff",
+      readOnlyNote: "Local read-only · source sessions are never modified",
     },
     sample: {
       s1: "Fix login timeout retry",
@@ -98,7 +170,7 @@ export const landing: Record<Locale, LandingCopy> = {
       readDone: "done",
       exportUser: "Upstream returns 504 now and then. Raise auth timeout from 30s to 60s?",
       exportAssistant: "Not yet. The logs show timeouts cluster around the token refresh…",
-      collectStdout: "external Agent instructions · saved to ./reports/weekly.md",
+      collectStdout: "external Agent instructions · target ./reports/weekly.md",
     },
     capabilities: {
       heading: "Four moves for everything after the chat ends.",
@@ -179,12 +251,60 @@ export const landing: Record<Locale, LandingCopy> = {
   zh: {
     nav: { browse: "会话阅读器", faq: "常见问题" },
     stage: {
-      sources: "来源",
+      sources: "已发现会话源",
       sample: "agent-dump · 示例输出",
       output: "输出",
       hits: "3 sessions · 7 hits · 保留消息定位",
-      untouched: "源会话未改动",
+      untouched: "只读模式 · 源会话未改动",
       handoff: "weekly.md 交接",
+      meta: "19 个本地 Provider · FTS5 索引",
+      moreProviders: "其余 13 款工具",
+      written: "已写入",
+      hitsList: [
+        {
+          uri: "codex://019a7c2e",
+          loc: "msg 3",
+          age: "2 天前",
+          lead: "网关超时配置梳理：先别提高 ",
+          match: "auth timeout",
+          tail: "，超时集中在 token 刷新阶段。",
+          file: "./sessions/codex/019a7c2e.md",
+          user: "上游偶发 504，auth timeout 要不要从 30s 提到 60s？",
+          assistant: "先别改。日志显示超时集中在 token 刷新那一步，优先复用连接池并记录上游延迟。",
+        },
+        {
+          uri: "claude://7f3c91",
+          loc: "msg 14",
+          age: "5 天前",
+          lead: "修复登录超时重试：",
+          match: "auth timeout",
+          tail: " 在 30s 后触发退避，需补齐取消信号。",
+          file: "./sessions/claude/7f3c91.md",
+          user: "鉴权上游超过 30s 无响应时，登录重试会一直堆积。",
+          assistant: "把请求的取消信号透传进重试循环，触发 auth timeout 后立即终止已取消的登录尝试。",
+        },
+        {
+          uri: "opencode://5c4b3a",
+          loc: "msg 1",
+          age: "9 天前",
+          lead: "会话刷新逻辑：对比上游 504 日志与本地 ",
+          match: "auth timeout",
+          tail: " 阈值。",
+          file: "./sessions/opencode/5c4b3a.md",
+          user: "帮我确认本地 auth timeout 是否比网关空闲窗口更短？",
+          assistant: "是的，客户端 auth timeout 为 30s，网关刷新窗口是 45s，对齐阈值后即可消除误重试。",
+        },
+      ],
+    },
+    footer: {
+      product: "产品",
+      providers: "支持的工具",
+      guides: "使用指南",
+      distribution: "分发与源码",
+      codexGuide: "导出 Codex 会话",
+      claudeGuide: "导出 Claude Code",
+      handoffGuide: "Agent 上下文交接",
+      readOnlyNote: "本地只读 · 不修改任何 Provider 源数据",
     },
     sample: {
       s1: "修复登录超时重试",
@@ -208,7 +328,7 @@ export const landing: Record<Locale, LandingCopy> = {
       readDone: "读完",
       exportUser: "上游偶发 504，auth timeout 要不要从 30s 提到 60s？",
       exportAssistant: "先别改。日志显示超时集中在 token 刷新那一步…",
-      collectStdout: "外部 Agent 指令 · 保存到 ./reports/weekly.md",
+      collectStdout: "外部 Agent 指令 · 目标报告 ./reports/weekly.md",
     },
     capabilities: {
       heading: "四个动作，覆盖一段对话的后半生。",
@@ -285,12 +405,60 @@ export const landing: Record<Locale, LandingCopy> = {
   ja: {
     nav: { browse: "閲覧", faq: "よくある質問" },
     stage: {
-      sources: "読み取り元",
+      sources: "検出された読み取り元",
       sample: "agent-dump · サンプル出力",
       output: "出力",
       hits: "3 sessions · 7 hits · 位置情報を保持",
-      untouched: "元セッションは変更なし",
+      untouched: "読み取り専用 · 元データは変更なし",
       handoff: "weekly.md 引き継ぎ",
+      meta: "19 のローカル Provider · FTS5 インデックス",
+      moreProviders: "ほか 13 ツール",
+      written: "書き出し完了",
+      hitsList: [
+        {
+          uri: "codex://019a7c2e",
+          loc: "msg 3",
+          age: "2 日前",
+          lead: "ゲートウェイ設定確認：",
+          match: "auth timeout",
+          tail: " を上げる前にトークン更新時の遅延を確認。",
+          file: "./sessions/codex/019a7c2e.md",
+          user: "上流でときどき 504。auth timeout を 30 秒から 60 秒に上げる？",
+          assistant: "まだ変えないで。ログではトークン更新の段階でタイムアウトが集中しています。接続再利用を先に確認しましょう。",
+        },
+        {
+          uri: "claude://7f3c91",
+          loc: "msg 14",
+          age: "5 日前",
+          lead: "ログイン再試行の修正：",
+          match: "auth timeout",
+          tail: " は 30 秒後にバックオフするため中断信号を伝播。",
+          file: "./sessions/claude/7f3c91.md",
+          user: "認証の上流が 30 秒止まるとログイン再試行が積み上がります。",
+          assistant: "再試行ループに中断シグナルを渡し、auth timeout 後にキャンセル済み要求を即座に止めます。",
+        },
+        {
+          uri: "opencode://5c4b3a",
+          loc: "msg 1",
+          age: "9 日前",
+          lead: "セッション更新ロジック：504 ログとローカルの ",
+          match: "auth timeout",
+          tail: " 閾値を比較。",
+          file: "./sessions/opencode/5c4b3a.md",
+          user: "ローカルの auth timeout がゲートウェイの待機時間より短いか確認できますか？",
+          assistant: "はい。クライアントは 30 秒、ゲートウェイ更新は 45 秒でした。揃えると不要な再試行が消えます。",
+        },
+      ],
+    },
+    footer: {
+      product: "製品",
+      providers: "対応ツール",
+      guides: "ガイド",
+      distribution: "配布・ソース",
+      codexGuide: "Codex セッションをエクスポート",
+      claudeGuide: "Claude Code をエクスポート",
+      handoffGuide: "Agent への引き継ぎ",
+      readOnlyNote: "ローカル読み取り専用 · 元セッションは変更しません",
     },
     sample: {
       s1: "ログインのタイムアウト再試行を修正",
@@ -314,7 +482,7 @@ export const landing: Record<Locale, LandingCopy> = {
       readDone: "完了",
       exportUser: "上流でときどき 504。auth timeout を 30 秒から 60 秒に上げる？",
       exportAssistant: "まだ変えないで。ログではトークン更新の段階でタイムアウトが集中…",
-      collectStdout: "外部 Agent 向け指示 · ./reports/weekly.md に保存",
+      collectStdout: "外部 Agent 向け指示 · 出力先 ./reports/weekly.md",
     },
     capabilities: {
       heading: "対話が終わったあとの、4つの使い方。",

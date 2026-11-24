@@ -3,7 +3,7 @@ layout: ../../../layouts/Guide.astro
 slug: export-codex-session
 category: export
 order: 1
-updated: "2026-11-22"
+updated: "2026-11-24"
 locale: ja
 title: Codex セッションを Markdown・JSON にエクスポート
 description: ローカルの Codex セッションを CLI 1コマンドで Markdown や JSON にエクスポート。セッション URI の確認手順、メモへのコピー方法、見つからない時の対処まで解説します。
@@ -29,12 +29,12 @@ uv を使う場合は `uv tool install agent-dump` を実行します。その�
 直近 30 日間の Codex セッションを一覧表示します：
 
 ```sh
-agent-dump --list -days 30 -query "provider:codex"
+agent-dump --list --days 30 --query "provider:codex"
 ```
 
 タイトルと作業ディレクトリから対象の対話を見つけ、一覧に表示された完全な `codex://…` URI をコピーします。`codex://<session-id>` と `codex://threads/<session-id>` の両方に対応しています。
 
-デフォルトの検索期間は 7 日間です。`-days 30` で対象期間を広げられます。一覧表示だけではファイルは出力されません。
+デフォルトの検索期間は 7 日間です。`--days 30` で対象期間を広げられます。一覧表示だけではファイルは出力されません。
 
 ## 3. Markdown にエクスポート
 
@@ -66,7 +66,7 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 
 ## セッションが見つからない場合
 
-- 古いセッションの場合は `-days 90` のように対象期間を広げてください。
+- 古いセッションの場合は `--days 90` のように対象期間を広げてください。
 - `agent-dump --providers` を実行すると、セッションをスキャンせずに Codex のデータソースが認識されているか確認できます。
 - 実行ユーザーアカウントと `CODEX_HOME` 環境変数を確認してください。Codex の探索順は `CODEX_HOME`、`~/.codex`、開発用フォールバック `data/codex` です。カスタム `CODEX_HOME` には個別ファイルではなく Codex のルートディレクトリを指定してください。
 - 最新の一覧から完全な URI をコピーし、サンプルのプレースホルダーをそのまま実行しないようにしてください。

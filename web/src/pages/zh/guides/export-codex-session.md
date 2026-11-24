@@ -3,7 +3,7 @@ layout: ../../../layouts/Guide.astro
 slug: export-codex-session
 category: export
 order: 1
-updated: "2026-11-22"
+updated: "2026-11-24"
 locale: zh
 title: 将 Codex 会话导出为 Markdown
 description: 使用 Agent Dump 找到本地 Codex 会话，复制真实 URI，并导出 Markdown 或 JSON。包含安装步骤、输出路径和找不到会话时的排查方法。
@@ -29,12 +29,12 @@ agent-dump --version
 列出最近 30 天的 Codex 会话：
 
 ```sh
-agent-dump --list -days 30 -query "provider:codex"
+agent-dump --list --days 30 --query "provider:codex"
 ```
 
 根据标题和工作目录找到目标对话，复制该条目中的完整 `codex://…` URI。`codex://<session-id>` 和 `codex://threads/<session-id>` 两种格式都支持。
 
-列表默认只查询最近七天，`-days 30` 将范围扩大到 30 天。列出会话不会导出文件。
+列表默认只查询最近七天，`--days 30` 将范围扩大到 30 天。列出会话不会导出文件。
 
 ## 3. 导出 Markdown
 
@@ -66,7 +66,7 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 
 ## 找不到会话时
 
-- 如果会话较早，将日期范围扩大，例如改为 `-days 90`。
+- 如果会话较早，将日期范围扩大，例如改为 `--days 90`。
 - 运行 `agent-dump --providers`，检查 Codex 数据源目录是否可用。这个命令不会扫描会话。
 - 检查用户账户和 `CODEX_HOME` 环境变量。Codex 按 `CODEX_HOME`、`~/.codex`、开发回退目录 `data/codex` 的顺序查找。自定义 `CODEX_HOME` 应指向 Codex 主目录，而不是某个会话文件。
 - 从最新列表复制完整 URI，不要原样执行示例占位符。

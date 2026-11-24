@@ -59,7 +59,7 @@ try {
         <div class="green">ok · source untouched</div></div></div>
         <div class="paper"><small>MARKDOWN · READY TO REUSE</small><p>session.md</p><i></i><i></i></div>
       </div></section>
-      <footer><span>Codex · Claude Code · Cursor <strong>+ 7 more</strong></span><span>${target.label}</span></footer>
+      <footer><span>Codex · Claude Code · Cursor <strong>+ 16 more</strong></span><span>${target.label}</span></footer>
     </main></body></html>`);
     await page.evaluate(() => document.fonts.ready);
     const png = await page.screenshot();

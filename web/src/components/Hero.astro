@@ -1,8 +1,8 @@
 ---
-import { install, providers, ui, type Locale } from "../lib/i18n";
-import { guideIndexPaths, guideUi } from "../lib/guides";
+import heroBgAvif from "../assets/hero-bg.avif?url";
+import heroBgWebp from "../assets/hero-bg.webp?url";
+import { ui, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
-import { version } from "../lib/version";
 import Icon from "./Icon.astro";
 
 interface Props {
@@ -11,73 +11,43 @@ interface Props {
 const { locale } = Astro.props;
 const t = ui[locale];
 const l = landing[locale];
-type Line = { text: string; kind?: string; hit?: boolean; count?: string; after?: string };
-const screens: { command: string; lines: Line[] }[] = [
-  {
-    command: "agent-dump search 'auth timeout'",
-    lines: [
-      { text: l.stage.hits, kind: "tm" },
-      { text: "claude://7f3c91 · msg 14", hit: true },
-      { text: "codex://019a7c2e · msg 3", hit: true },
-      { text: "cursor://b21e04 · msg 1", hit: true },
-    ],
-  },
-  {
-    command: "agent-dump export codex://019a7c2e",
-    lines: [
-      { text: "--format markdown --output ./sessions", kind: "tm" },
-      { text: "reading", count: "38", after: "messages" },
-      { text: "ok", kind: "tok" },
-    ],
-  },
-  {
-    command: "agent-dump collect --days 7",
-    lines: [
-      { text: "--emit-prompt --save ./reports/weekly.md", kind: "tm" },
-      { text: "chunked · every eligible message" },
-      { text: "status: complete", kind: "tok" },
-    ],
-  },
+const quickCmd = "npx @agent-dump/cli --help";
+const hits = l.stage.hitsList;
+const firstHit = hits[0];
+const sources = [
+  { name: "Claude Code", count: "142", active: true },
+  { name: "Codex", count: "96", active: true },
+  { name: "Cursor", count: "64", active: true },
+  { name: "OpenCode", count: "31" },
+  { name: "Gemini CLI", count: "28" },
+  { name: "Pi / Antigravity", count: "47" },
+  { name: l.stage.moreProviders, count: "89" },
 ];
-const papers = [
-  {
-    kind: "HITS + LOCATORS",
-    label: "auth timeout",
-    bars: [[86, true], [64], [72, true]],
-    cls: "pa",
-    t: "rotate(-7deg) translate(-78px, -26px)",
-  },
-  {
-    kind: "MARKDOWN",
-    label: `${l.sample.s2}.md`,
-    bars: [[92], [70], [54]],
-    cls: "pb",
-    t: "rotate(4deg) translate(-26px, -10px)",
-    stamp: true,
-  },
-  {
-    kind: "AGENT PROMPT",
-    label: l.stage.handoff,
-    bars: [[80], [60, true], [74]],
-    cls: "pc",
-    t: "rotate(-2deg)",
-  },
-];
+const titleJoined = locale === "en" ? `${t.heroTitle} ` : t.heroTitle;
 ---
 
-<section id="hero" class="hero dots">
-  <div class="wrap hero-grid">
-    <div>
-      <p class="pill rise">
-        <span class="ver">v{version}</span><span class="pdot"></span>{t.eyebrow}
-      </p>
-      <h1 class="h1 rise" style="animation-delay: 0.08s">
-        {t.heroTitle}<br /><span class="mk">{t.heroTitleAccent}</span>
+<section id="hero" class="hero">
+  <picture class="hero-bg" aria-hidden="true">
+    <source srcset={heroBgAvif} type="image/avif" />
+    <img
+      src={heroBgWebp}
+      alt=""
+      width="1664"
+      height="936"
+      decoding="async"
+      fetchpriority="high"
+    />
+  </picture>
+
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <h1 class="h1 rise">
+        {titleJoined}<span class="hero-accent">{t.heroTitleAccent}</span>
       </h1>
-      <p class="hero-lede rise" style="animation-delay: 0.16s">
+      <p class="hero-lede rise" style="animation-delay: 0.08s">
         {t.heroDescription}
       </p>
-      <div class="hero-acts rise" style="animation-delay: 0.24s">
+      <div class="hero-acts rise" style="animation-delay: 0.16s">
         <a
           href="#install"
           class="btn btn-key"
@@ -88,82 +58,165 @@ const papers = [
           {t.ctaInstall}
           <Icon name="arrowDown" />
         </a>
-        <a href={guideIndexPaths[locale]} class="btn btn-ghost">
-          {guideUi[locale].label}
-          <Icon name="arrowUpRight" />
-        </a>
+        <div class="hero-cmd">
+          <span class="hero-cmd-sig" aria-hidden="true">$</span>
+          <code>{quickCmd}</code>
+          <button
+            type="button"
+            class="hero-cmd-copy"
+            data-quick-copy={quickCmd}
+            data-install-method="npx"
+            data-copy-label={t.copy}
+            data-copied-label={t.copied}
+            aria-label={t.copy}
+          >
+            {t.copy}
+          </button>
+          <span role="status" aria-live="polite" class="sr-only" data-copy-status></span>
+        </div>
       </div>
-      <p class="hero-quick rise" style="animation-delay: 0.32s">
-        <span>{install.runLabel[locale]}</span><code>npx @agent-dump/cli --help</code>
-      </p>
     </div>
 
-    <div class="hv rise" style="animation-delay: 0.2s" aria-hidden="true">
-      <svg class="arrow" viewBox="64 12 44 51">
-        <path
-          d="M 78 15 L 78 40 L 68 40 L 86 60 L 104 40 L 94 40 L 94 15 Z"
-          fill="#4ade80"
-          stroke="#166534"
-          stroke-width="2.5"
-          stroke-linejoin="round"></path>
-      </svg>
-      <div class="term">
-        <div class="term-bar">
-          <span class="tab"><span class="prompt-mark">&gt;_</span>{l.stage.sample}</span>
-          <span>zsh</span>
+    <div class="hero-stage rise" style="animation-delay: 0.22s">
+      <div class="workbench" role="region" aria-label={l.stage.sample} data-hero-workbench>
+        <div class="wb-bar">
+          <div class="wb-left">
+            <span class="wb-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="wb-title">agent-dump</span>
+            <span class="wb-meta">{l.stage.meta}</span>
+          </div>
+          <span class="wb-readonly">{l.stage.untouched}</span>
         </div>
-        <div class="hv-body">
-          <ul class="srcs">
-            <li class="lab">{l.stage.sources}</li>
-            {providers.map((provider, index) => (
-              <li style={`animation-delay: ${index * 0.5}s`}>
-                <i></i>{provider.name}
-              </li>
-            ))}
-          </ul>
-          <div class="hv-shell">
-            {screens.map((screen, index) => (
-              <div class="scr">
-                <div class="cmd">
-                  <span class="tok">$</span>
-                  <span class="typ" style={`--w: ${screen.command.length}ch`}>
-                    {screen.command}
-                  </span>
-                  <span class="caret"></span>
-                </div>
-                {screen.lines.map((line, row) => (
-                  <div
-                    class:list={["o", line.kind]}
-                    style={`animation-delay: ${(index * 3 + 1.2 + row * 0.25).toFixed(2)}s`}
-                  >
-                    {line.hit && <span class="tok">› </span>}
-                    {line.text}
-                    {line.count && (
-                      <>
-                        {" "}<span class="tam">{line.count}</span> {line.after}
-                      </>
-                    )}
-                  </div>
-                ))}
+
+        <div class="wb-body">
+          <aside class="wb-sources" aria-hidden="true">
+            <div class="wb-col-head">{l.stage.sources}</div>
+            {sources.map((src) => (
+              <div class:list={["src-row", src.active && "active"]}>
+                <span>{src.name}</span>
+                <span class="src-count">{src.count}</span>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-      <div class="papers">
-        {papers.map((paper) => (
-          <div class={`paper ${paper.cls}`} style={`--t: ${paper.t}`}>
-            <p class="k">{paper.kind}</p>
-            <p class="n">{paper.label}</p>
-            <div class="bars">
-              {paper.bars.map(([width, hl]) => (
-                <span class:list={[hl && "hl"]} style={`width: ${width}%`}></span>
+          </aside>
+
+          <div class="wb-shell">
+            <div class="wb-cmd">
+              <span class="tok" aria-hidden="true">$</span>
+              <span>agent-dump search "auth timeout" --days 30</span>
+            </div>
+            <div class="wb-hits" role="tablist" aria-label={l.stage.sample}>
+              {hits.map((hit, index) => (
+                <button
+                  type="button"
+                  role="tab"
+                  class:list={["wb-hit", index === 0 && "selected"]}
+                  aria-selected={index === 0 ? "true" : "false"}
+                  data-hit-uri={hit.uri}
+                  data-hit-loc={hit.loc.replace(" ", "-")}
+                  data-hit-file={hit.file}
+                  data-hit-user={hit.user}
+                  data-hit-assistant={hit.assistant}
+                >
+                  <span class="wb-hit-uri">
+                    <span>{hit.uri}</span>
+                    <span class="wb-hit-meta">{hit.loc} · {hit.age}</span>
+                  </span>
+                  <span class="wb-hit-snip">
+                    {hit.lead}<mark>{hit.match}</mark>{hit.tail}
+                  </span>
+                </button>
               ))}
             </div>
-            {paper.stamp && <span class="stamp">{l.stage.untouched}</span>}
           </div>
-        ))}
+
+          <div class="wb-output" aria-live="polite">
+            <div class="wb-out-head">
+              <span class="tam">export · markdown</span>
+              <strong data-wb-uri>{firstHit.uri}</strong>
+            </div>
+            <div class="wb-out-doc">
+              <div class="wb-out-meta" data-wb-source>
+                source: {firstHit.uri}#{firstHit.loc.replace(" ", "-")}
+              </div>
+              <p>
+                <strong>User:</strong>{" "}
+                <span data-wb-user>{firstHit.user}</span>
+              </p>
+              <p>
+                <strong>Assistant:</strong>{" "}
+                <span data-wb-assistant>{firstHit.assistant}</span>
+              </p>
+            </div>
+            <div class="wb-out-foot">
+              <Icon name="check" small />
+              <span>{l.stage.written} <span data-wb-file>{firstHit.file}</span></span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
+
+<script>
+  import { copyText } from "../lib/clipboard";
+  import { trackEvent } from "../lib/analytics";
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-quick-copy]")) {
+    let timer = 0;
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.quickCopy ?? "";
+      const copyLabel = btn.dataset.copyLabel ?? "Copy";
+      const copiedLabel = btn.dataset.copiedLabel ?? "Copied";
+      try {
+        if (!(await copyText(text))) return;
+        btn.textContent = copiedLabel;
+        btn.classList.add("ok");
+        btn.setAttribute("aria-label", copiedLabel);
+        const status = btn.nextElementSibling;
+        if (status?.hasAttribute("data-copy-status")) {
+          status.textContent = copiedLabel;
+        }
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          btn.textContent = copyLabel;
+          btn.classList.remove("ok");
+          btn.setAttribute("aria-label", copyLabel);
+          if (status?.hasAttribute("data-copy-status")) {
+            status.textContent = "";
+          }
+        }, 1600);
+        const method = btn.dataset.installMethod;
+        if (method) trackEvent("install-copy", { method });
+      } catch {
+        /* clipboard unavailable */
+      }
+    });
+  }
+
+  for (const wb of document.querySelectorAll<HTMLElement>("[data-hero-workbench]")) {
+    const tabs = Array.from(wb.querySelectorAll<HTMLButtonElement>("[data-hit-uri]"));
+    const uriEl = wb.querySelector<HTMLElement>("[data-wb-uri]");
+    const srcEl = wb.querySelector<HTMLElement>("[data-wb-source]");
+    const userEl = wb.querySelector<HTMLElement>("[data-wb-user]");
+    const asstEl = wb.querySelector<HTMLElement>("[data-wb-assistant]");
+    const fileEl = wb.querySelector<HTMLElement>("[data-wb-file]");
+
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => {
+        for (const other of tabs) {
+          const active = other === tab;
+          other.classList.toggle("selected", active);
+          other.setAttribute("aria-selected", String(active));
+        }
+        const uri = tab.dataset.hitUri ?? "";
+        const loc = tab.dataset.hitLoc ?? "";
+        if (uriEl) uriEl.textContent = uri;
+        if (srcEl) srcEl.textContent = `source: ${uri}#${loc}`;
+        if (userEl) userEl.textContent = tab.dataset.hitUser ?? "";
+        if (asstEl) asstEl.textContent = tab.dataset.hitAssistant ?? "";
+        if (fileEl) fileEl.textContent = tab.dataset.hitFile ?? "";
+      });
+    }
+  }
+</script>

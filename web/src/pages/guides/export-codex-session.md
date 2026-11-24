@@ -3,7 +3,7 @@ layout: ../../layouts/Guide.astro
 slug: export-codex-session
 category: export
 order: 1
-updated: "2026-11-22"
+updated: "2026-11-24"
 locale: en
 title: Export Codex Sessions to Markdown and JSON
 description: Export or copy a local Codex session to Markdown or JSON with one CLI command. Find the session URI, save transcripts to notes, and fix missing sessions.
@@ -29,12 +29,12 @@ Run the following commands on the machine and under the user account where your 
 List Codex sessions from the last 30 days:
 
 ```sh
-agent-dump --list -days 30 -query "provider:codex"
+agent-dump --list --days 30 --query "provider:codex"
 ```
 
 Use the title and working directory to identify the conversation. Copy the full `codex://…` URI from its list entry. Both `codex://<session-id>` and `codex://threads/<session-id>` are supported.
 
-The default list window is seven days; `-days 30` widens it. Listing sessions does not export files.
+The default list window is seven days; `--days 30` widens it. Listing sessions does not export files.
 
 ## 3. Export to Markdown
 
@@ -66,7 +66,7 @@ For a notes workflow, see [save AI conversations to Obsidian](/guides/save-ai-co
 
 ## If the session is missing
 
-- Widen the date window, for example `-days 90`, if the session is older.
+- Widen the date window, for example `--days 90`, if the session is older.
 - Run `agent-dump --providers` to check whether the Codex source root is available without scanning sessions.
 - Check the user account and `CODEX_HOME` environment variable. Codex discovery checks `CODEX_HOME`, then `~/.codex`, then the development fallback `data/codex`. A custom `CODEX_HOME` should point to the Codex home, not an individual session file.
 - Copy the complete URI from a fresh listing. Do not run the example placeholder unchanged.

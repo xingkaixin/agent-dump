@@ -4,7 +4,7 @@ locale: "en"
 slug: "weekly-report-from-ai-sessions"
 category: "reports"
 order: 5
-updated: "2026-11-22"
+updated: "2026-11-24"
 title: "Weekly Work Reports from Codex & Claude Code Sessions"
 description: "Turn local Codex and Claude Code sessions into a daily or weekly work report. Preview scope with --dry-run, run AI collect, or emit an agent handoff prompt."
 ---
@@ -27,7 +27,7 @@ Inspect the selected sources and any diagnostics before requesting summaries. A 
 
 ## Generate with your configured AI provider
 
-Configure the `[ai]` section using `agent-dump --config`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#configuration-file). Then run:
+Configure the `[ai]` section using `agent-dump --config edit`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#configuration-file). Then run:
 
 ```sh
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --save ./reports/weekly.md
