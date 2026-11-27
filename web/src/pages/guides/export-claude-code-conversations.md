@@ -4,66 +4,127 @@ locale: "en"
 slug: "export-claude-code-conversations"
 category: "export"
 order: 2
-updated: "2026-11-22"
-title: "Export Claude Code Sessions to Markdown and JSON"
-description: "Export local Claude Code sessions and conversations to Markdown or structured JSON with token stats and messages. Includes batch export and troubleshooting."
+updated: "2026-11-27"
+title: "Export Claude Code Sessions to Markdown & JSON (Free CLI)"
+description: "Export local Claude Code sessions and subagents from ~/.claude/projects to Markdown, JSON with token stats, or raw JSONL. Batch export, read-only, no API key."
+faq:
+  - question: "Where does Claude Code store local session transcripts?"
+    answer: "Claude Code saves local session records as JSONL files under ~/.claude/projects/<project>/<session>.jsonl, with subagent transcripts under <session>/subagents/. If you use a custom directory, set CLAUDE_CONFIG_DIR before running Agent Dump."
+  - question: "How is Agent Dump different from Claude Code's built-in /export or --resume?"
+    answer: "Built-in /export only saves the active conversation one session at a time, and --resume reopens a session interactively. Agent Dump reads all historical sessions and subagents in read-only mode, supports full-text search, batch export, and normalized JSON with token stats across 19 tools."
+  - question: "Does this export claude.ai web conversations?"
+    answer: "No. Agent Dump reads local Claude Code CLI sessions stored on your machine. It does not connect to claude.ai web accounts or parse claude.ai conversations.json account export archives."
 ---
 
-Agent Dump exports local Claude Code CLI sessions into Markdown or structured JSON files you can read, search, or parse outside the terminal. Use Markdown for project notes and reviews, and JSON for scripts or analytics. Exporting reads local session history without modifying original Claude Code records (this guide covers local Claude Code CLI sessions, not claude.ai web account exports).
+Agent Dump exports local Claude Code CLI sessions into clean Markdown or structured JSON files without modifying original records. Use Markdown for docs, PR notes, and Obsidian, or JSON for scripts and token audits. Everything runs locally with no API key required.
 
-## Install and find a conversation
+> This guide covers local **Claude Code CLI** sessions (`~/.claude/projects/`), not `claude.ai` web account exports.
 
-Run these commands on the machine where you used Claude Code. If you have npm and Node.js 22 or later, install the CLI:
+## Install or run without installing
 
-```sh
-npm install -g @agent-dump/cli
-agent-dump --list --days 30 --query 'provider:claude'
-```
-
-[Other installation options](/#install) include native binaries, Homebrew, Scoop, and uv. The list command selects sessions updated in the last 30 days, including older conversations you recently returned to. To filter by creation time instead, add `--time-field created`.
-
-Look for the conversation title and working directory. Copy the full `claude://...` URI. To focus on your current project, run this from its directory:
+Install the native CLI (no Python or Node.js required), or run directly with `npx`:
 
 ```sh
-agent-dump --list --days 30 --query 'provider:claude path:.'
+# macOS / Linux (Homebrew)
+brew install xingkaixin/tap/agent-dump
+
+# macOS / Linux (shell installer)
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh
+
+# Or try immediately without installing (Node.js 22+)
+npx @agent-dump/cli list --days 30 --query 'provider:claude'
 ```
 
-## Export a readable record
+See [all installation options](/#install) for Scoop (Windows), `uv`, `npm`, and `bun`. Run commands on the machine and OS user account where you ran Claude Code.
+
+## Find your Claude Code sessions
+
+List sessions updated in the last 30 days, or scope to the current project directory:
+
+```sh
+agent-dump list --days 30 --query 'provider:claude'
+agent-dump list --days 30 --query 'provider:claude path:.'
+```
+
+The list shows each session's title, working directory, and `claude://<session-id>` URI. Subagent transcripts under `<session>/subagents/` appear as separate sessions too. By default `--days` filters by latest activity time; add `--time-field created` (or `--since` / `--until`) to filter by creation date or an exact range.
+
+## Export a session to Markdown
 
 Replace `YOUR_SESSION_ID` with a real ID from the list:
 
 ```sh
-agent-dump 'claude://YOUR_SESSION_ID' --format markdown --output ./exports
+agent-dump export 'claude://YOUR_SESSION_ID' --format markdown --output ./exports
 ```
 
-The command prints the saved file path. Markdown files go under `./exports/claude/`, relative to your current directory. Open the printed path in your editor. This gives you a portable conversation record; it does not recreate the original agent process or resume its execution.
+The command prints the written path under `./exports/claudecode/<session-id>.md`. A Markdown export looks like this:
 
-## Keep structured data too
+```markdown
+# Session Dump
 
-Request both formats in the same command when you need a readable note and machine-readable data:
+- URI: `claude://7f3c91ab`
+
+## 1. User
+
+Login retries pile up when the auth upstream stalls past 30s.
+
+## 2. Assistant
+
+Pass the request AbortSignal into the retry loop so canceled logins stop immediately after the timeout.
+```
+
+Exporting creates a portable, human-readable transcript. It does not recreate the original Claude Code process or resume its runtime state.
+
+## Export structured JSON or raw JSONL
+
+Request both Markdown and normalized JSON in one command:
 
 ```sh
-agent-dump 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
+agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
 
-`--format json` writes a normalized JSON file containing session metadata (`id`, `title`, `directory`, `version`, `time_created`, `time_updated`), aggregated `stats` (`total_input_tokens`, `total_output_tokens`, `total_cost`, `message_count`), and a `messages` array (`role`, `model`, `time_created`, `tokens`, `cost`, and structured `parts`). To export the untouched source transcript instead, use `--format raw` to copy the original `.raw.jsonl` file.
+`--format json` writes a normalized JSON file containing session metadata (`id`, `title`, `directory`, `version`, `time_created`, `time_updated`), aggregated `stats`, and structured `messages`:
 
-`--format json` writes an export file. It is different from `--json`, which produces structured standard output for supported query and reading modes. For scripts that need only part of a long conversation, use [bounded session reading](/guides/handoff-context-to-ai-agent/) instead of loading a full export.
+```json
+{
+  "id": "7f3c91ab",
+  "title": "Fix login timeout retry",
+  "directory": "/Users/dev/project",
+  "stats": {
+    "message_count": 18,
+    "total_input_tokens": 42180,
+    "total_output_tokens": 3940,
+    "total_cost": 0.19
+  },
+  "messages": [
+    {
+      "role": "user",
+      "parts": [{ "type": "text", "text": "Login retries pile up..." }]
+    }
+  ]
+}
+```
 
-## Export several conversations
+To copy the untouched source file instead, pass `--format raw` (writes `.raw.jsonl`). Note that `--format json` exports an archived session file, which is different from Claude Code's runtime `--output-format json` flag or Agent Dump's `--json` stdout flag for scripts. For reading part of a very long session, see [bounded session reading](/guides/handoff-context-to-ai-agent/).
 
-For manual batch selection, open the interactive exporter:
+## Batch export or browse in the terminal
+
+To preview conversations and export multiple Claude Code sessions at once:
 
 ```sh
-agent-dump --interactive --query 'provider:claude' --format markdown --output ./exports
+agent-dump browse --days 30 --query 'provider:claude'
 ```
 
-Choose the sessions in the terminal. This workflow requires an interactive terminal; use a URI for an unattended single-session export.
+Press `Space` to mark sessions and `e` to export the marked set. You can also run `agent-dump export --query 'provider:claude' --format markdown --output ./exports` to open the selector directly with your chosen format and output directory.
 
-## When history is missing
+## Where Claude Code stores sessions & troubleshooting
 
-Run `agent-dump --providers` to inspect source availability, and widen `--days` if the conversation is older. Confirm that you are using the same OS account and machine as Claude Code. A project filter matches the recorded working directory; remove `path:.` to check whether it excluded the session.
+Agent Dump checks `CLAUDE_CONFIG_DIR` first, then `~/.claude`. Within that directory it scans `projects/<project>/<session>.jsonl` and `<session>/subagents/`.
 
-Agent Dump reads local saved history. It cannot fetch missing conversations from a remote account or recover deleted source files. Before sharing an export, review its contents for project information you do not intend to publish.
+If a session is missing:
 
-Next, [search across coding conversations](/guides/search-ai-coding-history/) or [save the export in Obsidian](/guides/save-ai-conversations-to-obsidian/).
+- Run `agent-dump providers` to confirm the detected Claude Code source path.
+- Widen the window with `--days 90` or use `--since` / `--until`.
+- Remove `path:.` if the session was started from a parent or different working directory.
+- Sessions with no visible user or assistant messages are skipped automatically.
+
+Next, [search across all AI coding sessions](/guides/search-ai-coding-history/) or [save exported conversations to Obsidian](/guides/save-ai-conversations-to-obsidian/).

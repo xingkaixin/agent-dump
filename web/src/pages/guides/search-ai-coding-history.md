@@ -3,72 +3,94 @@ layout: "../../layouts/Guide.astro"
 locale: "en"
 slug: "search-ai-coding-history"
 category: "search"
-order: 3
-updated: "2026-11-24"
-title: "Search AI Coding History Across Codex & Claude Code"
-description: "Search local Codex, Claude Code, and AI coding sessions to trace past fixes and decisions. Filter by project, locate matching messages, and export cited excerpts."
+order: 7
+updated: "2026-11-27"
+title: "Search Claude Code, Codex & AI Coding History Locally"
+description: "Full-text search local Claude Code, Codex, Cursor, and Gemini CLI sessions with SQLite FTS5. Trace past AI code fixes, filter by project, and export cited excerpts."
+faq:
+  - question: "Does searching AI coding history require an API key or send data to the cloud?"
+    answer: "No. Agent Dump builds a local SQLite FTS5 index under its own cache directory and runs full-text search completely offline. No API key is needed and original session files are never modified."
+  - question: "What parts of a session does Agent Dump search?"
+    answer: "Full-text search covers normalized session titles, user and assistant messages, reasoning blocks, and tool state including tool errors. That makes it easy to trace failed commands or specific error messages across tools."
+  - question: "Can I search only sessions from a specific project or date range?"
+    answer: "Yes. Pass path:. inside --query from your project root to match its working directory, filter tools with provider:claude,codex, and narrow dates with --days, --since, or --until."
 ---
 
-When you remember solving a problem but cannot remember which coding assistant you used, search your local conversation history with Agent Dump. You can narrow results to a project, inspect the matching messages, and keep a cited excerpt for the next task.
+When you remember fixing a bug or making a design decision with an AI assistant—but cannot remember whether it happened in Claude Code, Codex, Cursor, or Gemini CLI—search all of your local transcripts at once with Agent Dump.
 
-Install Agent Dump using [your preferred package manager](/#install). These examples run on the machine holding the source sessions. Searching works locally and does not require an AI API key.
+Install via `brew install xingkaixin/tap/agent-dump` or [other install methods](/#install). Search runs locally using a SQLite FTS5 index with no API key required.
 
-## Search for the words you remember
+## Search across all local AI sessions
 
-```sh
-agent-dump --search 'auth timeout' --days 90
-```
-
-Every distinct term must match the session, but terms can appear in different messages or corpus fields. This is literal full-text search, not semantic search. The corpus includes normalized titles, messages, reasoning, and tool state. FTS operators such as `AND` are not interpreted as query syntax.
-
-The default date window is seven days filtered by latest update time. Increase `--days` for older work, or pass `--time-field created` (or `--since` / `--until`) when you want to filter by creation date or an exact range:
+Run a literal full-text search over the last 90 days:
 
 ```sh
-agent-dump --search 'auth timeout' --time-field created --days 30
+agent-dump search 'auth timeout' --days 90
 ```
 
-## Narrow to a project or tool
-
-Run from your project's working directory:
+Every distinct word must occur in the session, across titles, visible dialogue, reasoning, or tool errors. By default the window covers the last 7 days by latest update time. Use `--since` and `--until` for an exact local date range, or `--time-field created` to filter by creation date:
 
 ```sh
-agent-dump --search 'database migration' --days 90 --query 'provider:codex,claude path:.'
+agent-dump search 'auth timeout' --since 2026-11-01 --until 2026-11-27
 ```
 
-The `--query` option adds filters. Its keyword component matches like `--search`: every whitespace-separated term must occur. `--search` also ranks results and shows evidence, so keep the search terms in `--search` and the scope in `--query`.
+## Filter by project or AI coding tool
 
-## Locate the evidence
-
-Add `--locate --json` to get message locations with machine-readable results:
+Run from your repository root to limit hits to the current working directory and specific tools:
 
 ```sh
-agent-dump --search 'database migration' --days 90 --locate --json
+agent-dump search 'database migration' --days 90 --query 'provider:claude,codex path:.'
 ```
 
-Use a URI and message locator returned by this command. Replace both placeholders in the following example:
+Put your search keywords in `search` (so results are ranked with evidence snippets) and put scope filters (`provider:`, `path:`, `role:`, `limit:`) in `--query`.
+
+## Locate matching messages and trace decisions
+
+Add `--locate --json` to get machine-readable message locators for every hit:
+
+```sh
+agent-dump search 'database migration' --days 90 --locate --json
+```
+
+Pass the returned URI and `REVISION:POSITION` locator back into Agent Dump to inspect surrounding turns:
 
 ```sh
 agent-dump 'codex://YOUR_SESSION_ID' --message 'REVISION:POSITION' --before 2 --after 3
 ```
 
-This prints the matching message and nearby context. A session matched only by its title can have no message locations. A locator is tied to a source revision; if the conversation changes, rerun the search for fresh locations rather than reusing a stale one.
+Because a locator is bound to a source revision, re-run `search --locate` if the session has new messages.
 
-## Read in the terminal
+## Browse and search interactively in the terminal
 
-For an interactive reader, use:
-
-```sh
-agent-dump --browse --days 90 --query 'provider:codex,claude path:.'
-```
-
-Select a session and press Enter. Use `/` to search within the current conversation, `n` and `N` to move between matches, and `t` to show tool details. Press `q` to close the reader. This requires a terminal; scripts should use [paged JSON reading](/guides/handoff-context-to-ai-agent/).
-
-## Keep a small excerpt
+Open the terminal reader pre-filtered to your project:
 
 ```sh
-agent-dump 'codex://YOUR_SESSION_ID' --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output ./excerpts
+agent-dump browse --days 90 --query 'provider:claude,codex path:.'
 ```
 
-The exported excerpt keeps its session URI, locator, and message range. Check the reported output path and any diagnostics. The source transcript remains unchanged. Provider format restrictions still apply; Cursor supports JSON and print, but not Markdown.
+Press `Enter` to open a conversation, `/` to search inside it, `n` / `N` to jump between hits, `t` to expand tool calls and errors, and `q` to quit. For scripts and AI agents, use [bounded JSON reading](/guides/handoff-context-to-ai-agent/).
 
-If there are no results, shorten the terms, widen the date window, remove the project filter, and run `agent-dump --providers` to inspect source availability.
+## Export a cited context excerpt
+
+Save only the relevant turns—with session URI and message range preserved—to Markdown or JSON:
+
+```sh
+agent-dump 'codex://YOUR_SESSION_ID' --message 'REVISION:POSITION' --before 2 --after 3 --format markdown,json --output ./excerpts
+```
+
+An exported Markdown excerpt looks like this:
+
+```markdown
+# Session Context
+
+- URI: `codex://019a7c2e`
+- Locator: `rev1:3`
+- Messages: 1–6 of 24
+- Status: ok
+
+## 3. user
+
+Upstream returns 504 now and then. Raise auth timeout from 30s to 60s?
+```
+
+Provider format rules still apply (for example, Cursor supports `json` and `print`, not `markdown`). If a query returns nothing, shorten the keywords, widen `--days`, remove `path:.`, and run `agent-dump providers` to verify discovered sources.
