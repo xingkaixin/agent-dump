@@ -5,11 +5,13 @@ slug: "export-claude-code-conversations"
 category: "export"
 order: 2
 updated: "2026-11-27"
-title: "Export Claude Code Sessions to Markdown & JSON (Free CLI)"
-description: "Export local Claude Code sessions and subagents from ~/.claude/projects to Markdown, JSON with token stats, or raw JSONL. Batch export, read-only, no API key."
+title: "Export Claude Code Sessions to Markdown & JSON (Token Stats)"
+description: "Export local Claude Code sessions from ~/.claude/projects to Markdown or JSON with input_tokens & output_tokens stats, plus --output-format json comparison."
 faq:
   - question: "Where does Claude Code store local session transcripts?"
     answer: "Claude Code saves local session records as JSONL files under ~/.claude/projects/<project>/<session>.jsonl, with subagent transcripts under <session>/subagents/. If you use a custom directory, set CLAUDE_CONFIG_DIR before running Agent Dump."
+  - question: "How is --format json different from Claude Code's --output-format json?"
+    answer: "Claude Code's --output-format json prints a single-run stdout result object with session_id, total_cost_usd, and usage tokens. Agent Dump's --format json reads saved ~/.claude/projects JSONL files offline and exports normalized messages plus total_input_tokens and total_output_tokens. Local JSONL does not store USD cost, so stats.total_cost is 0."
   - question: "How is Agent Dump different from Claude Code's built-in /export or --resume?"
     answer: "Built-in /export only saves the active conversation one session at a time, and --resume reopens a session interactively. Agent Dump reads all historical sessions and subagents in read-only mode, supports full-text search, batch export, and normalized JSON with token stats across 19 tools."
   - question: "Does this export claude.ai web conversations?"
@@ -17,6 +19,12 @@ faq:
 ---
 
 Agent Dump exports local Claude Code CLI sessions into clean Markdown or structured JSON files without modifying original records. Use Markdown for docs, PR notes, and Obsidian, or JSON for scripts and token audits. Everything runs locally with no API key required.
+
+```sh
+# List recent Claude Code sessions, then export one to JSON + Markdown
+npx @agent-dump/cli list --days 30 --query 'provider:claude'
+npx @agent-dump/cli export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
+```
 
 > This guide covers local **Claude Code CLI** sessions (`~/.claude/projects/`), not `claude.ai` web account exports.
 
@@ -82,7 +90,7 @@ Request both Markdown and normalized JSON in one command:
 agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
 
-`--format json` writes a normalized JSON file containing session metadata (`id`, `title`, `directory`, `version`, `time_created`, `time_updated`), aggregated `stats`, and structured `messages`:
+`--format json` writes a normalized JSON file containing session metadata (`id`, `title`, `directory`, `version`, `time_created`, `time_updated`), aggregated `stats`, and structured `messages` with per-turn `tokens`:
 
 ```json
 {
@@ -93,18 +101,36 @@ agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./e
     "message_count": 18,
     "total_input_tokens": 42180,
     "total_output_tokens": 3940,
-    "total_cost": 0.19
+    "total_cost": 0
   },
   "messages": [
     {
-      "role": "user",
-      "parts": [{ "type": "text", "text": "Login retries pile up..." }]
+      "role": "assistant",
+      "tokens": {
+        "input_tokens": 1240,
+        "output_tokens": 310,
+        "cache_read_input_tokens": 8900,
+        "cache_creation_input_tokens": 0
+      },
+      "parts": [{ "type": "text", "text": "Pass the request AbortSignal into the retry loop..." }]
     }
   ]
 }
 ```
 
-To copy the untouched source file instead, pass `--format raw` (writes `.raw.jsonl`). Note that `--format json` exports an archived session file, which is different from Claude Code's runtime `--output-format json` flag or Agent Dump's `--json` stdout flag for scripts. For reading part of a very long session, see [bounded session reading](/guides/handoff-context-to-ai-agent/).
+### Field comparison: `--output-format json` vs local JSONL vs Agent Dump
+
+Claude Code's headless `--output-format json` prints a single-run result summary to stdout, whereas `~/.claude/projects/<project>/<session>.jsonl` stores the full multi-turn transcript on disk. Here is how their fields map to `agent-dump export --format json`:
+
+| Field | Claude Code `--output-format json` | Local `~/.claude/projects/*.jsonl` | `agent-dump export --format json` |
+| --- | --- | --- | --- |
+| Session ID | `session_id` | `sessionId` | `id` |
+| Input tokens | `usage.input_tokens` (+ cache) | `message.usage.input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` | `stats.total_input_tokens` (includes cache input tokens) & `messages[].tokens` |
+| Output tokens | `usage.output_tokens` | `message.usage.output_tokens` | `stats.total_output_tokens` & `messages[].tokens.output_tokens` |
+| Cost (USD) | `total_cost_usd` | Not recorded in local JSONL | `stats.total_cost` (`0` for Claude Code) |
+| Scope | One headless CLI run | Raw local transcript on disk | Normalized archived session + subagents |
+
+To copy the untouched source file instead, pass `--format raw` (writes `.raw.jsonl`). Note that `--format json` exports an archived session file, which is different from Agent Dump's `--json` stdout flag for scripts. For reading part of a very long session, see [bounded session reading](/guides/handoff-context-to-ai-agent/).
 
 ## Batch export or browse in the terminal
 

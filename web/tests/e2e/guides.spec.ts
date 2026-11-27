@@ -43,6 +43,9 @@ test("guide quick-install card copies commands and FAQ emits JSON-LD", async ({
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe("npx @agent-dump/cli list --days 30");
+  await expect(
+    installBox.locator('a[href="https://codesesh.xingkaixin.me/"]'),
+  ).toBeVisible();
 
   const jsonLdText = await page
     .locator('script[type="application/ld+json"]')
@@ -52,4 +55,52 @@ test("guide quick-install card copies commands and FAQ emits JSON-LD", async ({
     (node: { "@type"?: string }) => node["@type"] === "FAQPage",
   );
   expect(faq?.mainEntity?.length).toBeGreaterThan(0);
+});
+
+test("Claude Code and Codex guides expose comparison table, anchors, and copy tracking", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => {
+    const events: { name: string; data: Record<string, string> }[] = [];
+    (window as unknown as { __umamiEvents: typeof events }).__umamiEvents =
+      events;
+    (
+      window as unknown as {
+        umami: { track: (name: string, data: Record<string, string>) => Promise<void> };
+      }
+    ).umami = {
+      track: async (name: string, data: Record<string, string>) => {
+        events.push({ name, data });
+      },
+    };
+  });
+
+  await page.goto("/guides/export-claude-code-conversations/");
+  await expect(page.locator(".prose table")).toContainText("total_cost_usd");
+  await page.locator(".guide-copy").first().click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __umamiEvents: { name: string; data: Record<string, string> }[];
+            }
+          ).__umamiEvents,
+      ),
+    )
+    .toContainEqual({
+      name: "guide-copy",
+      data: {
+        locale: "en",
+        guide: "export-claude-code-conversations",
+        target: "intro",
+      },
+    });
+
+  await page.goto("/guides/export-codex-session/");
+  await expect(page.locator('[id="2-find-the-session-uri"]')).toBeVisible();
+  await expect(page.locator('[id="3-export-to-markdown"]')).toBeVisible();
 });

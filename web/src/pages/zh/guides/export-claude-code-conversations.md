@@ -10,6 +10,8 @@ description: "从本地 ~/.claude/projects 导出 Claude Code 会话与子代理
 faq:
   - question: "Claude Code 的本地对话记录保存在哪里？"
     answer: "Claude Code 默认把会话保存为 ~/.claude/projects/<project>/<session>.jsonl，子代理记录在 <session>/subagents/ 下。如果你自定义了配置目录，运行前设置 CLAUDE_CONFIG_DIR 即可。"
+  - question: "agent-dump 的 --format json 和 Claude Code 的 --output-format json 有什么区别？"
+    answer: "Claude Code 的 --output-format json 是单次无头运行时输出到标准输出的结果对象（包含 session_id、total_cost_usd、usage tokens）；agent-dump 的 --format json 离线读取 ~/.claude/projects 下的本地 JSONL，导出归一化消息与 total_input_tokens / total_output_tokens 汇总。本地 JSONL 不记录美元费用，因此 stats.total_cost 为 0。"
   - question: "和 Claude Code 内置的 /export 或 --resume 有什么区别？"
     answer: "内置 /export 只能逐个导出当前打开的会话，--resume 则是重新进入交互。Agent Dump 以只读方式读取所有历史会话和子代理，支持全文搜索、批量导出和带 Token 统计的归一化 JSON，并且支持跨 19 款工具统一操作。"
   - question: "可以导出 claude.ai 网页版对话吗？"
@@ -17,6 +19,12 @@ faq:
 ---
 
 Agent Dump 可以把本机保存的 Claude Code CLI 会话导出为干净的 Markdown 或结构化 JSON 文件，不修改任何原始记录。Markdown 适合归档笔记和代码评审，JSON 适合脚本处理与 Token 统计。整个过程在本地执行，不需要 API Key。
+
+```sh
+# 列出近期 Claude Code 会话，并导出为 JSON + Markdown
+npx @agent-dump/cli list --days 30 --query 'provider:claude'
+npx @agent-dump/cli export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
+```
 
 > 本指南针对本地 **Claude Code CLI** 会话（`~/.claude/projects/`），不涉及 `claude.ai` 网页版数据导出。
 
@@ -82,7 +90,7 @@ agent-dump export 'claude://YOUR_SESSION_ID' --format markdown --output ./export
 agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
 
-`--format json` 会写出归一化 JSON，包含会话元数据（`id`、`title`、`directory`、`version`、`time_created`、`time_updated`）、汇总统计 `stats` 以及 `messages` 数组：
+`--format json` 会写出归一化 JSON，包含会话元数据（`id`、`title`、`directory`、`version`、`time_created`、`time_updated`）、汇总统计 `stats` 以及带单轮 `tokens` 的 `messages` 数组：
 
 ```json
 {
@@ -93,16 +101,34 @@ agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./e
     "message_count": 18,
     "total_input_tokens": 42180,
     "total_output_tokens": 3940,
-    "total_cost": 0.19
+    "total_cost": 0
   },
   "messages": [
     {
-      "role": "user",
-      "parts": [{ "type": "text", "text": "鉴权上游超过 30s 无响应时..." }]
+      "role": "assistant",
+      "tokens": {
+        "input_tokens": 1240,
+        "output_tokens": 310,
+        "cache_read_input_tokens": 8900,
+        "cache_creation_input_tokens": 0
+      },
+      "parts": [{ "type": "text", "text": "把请求的 AbortSignal 透传进重试循环..." }]
     }
   ]
 }
 ```
+
+### 字段对照：`--output-format json`、本地 JSONL 与 Agent Dump
+
+Claude Code 运行时的 `--output-format json` 只输出单次无头调用的汇总结果；本地 `~/.claude/projects/<project>/<session>.jsonl` 保存完整多轮记录。下表对应三者常见字段：
+
+| 字段 | Claude Code `--output-format json` | 本地 `~/.claude/projects/*.jsonl` | `agent-dump export --format json` |
+| --- | --- | --- | --- |
+| 会话 ID | `session_id` | `sessionId` | `id` |
+| 输入 Token | `usage.input_tokens`（含缓存字段） | `message.usage.input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` | `stats.total_input_tokens`（含缓存输入）与 `messages[].tokens` |
+| 输出 Token | `usage.output_tokens` | `message.usage.output_tokens` | `stats.total_output_tokens` 与 `messages[].tokens.output_tokens` |
+| 费用（USD） | `total_cost_usd` | 本地 JSONL 未记录 | `stats.total_cost`（Claude Code 固定为 `0`） |
+| 范围 | 单次无头命令输出 | 磁盘原始多轮日志 | 归一化归档会话与子代理 |
 
 如需保留未加工的源文件，使用 `--format raw` 导出 `.raw.jsonl`。注意 `--format json` 是写出导出文件，与 `--json`（将查询和分页读取结果输出到标准输出）不同。若脚本只需读取长会话的一部分，请看[分页读取与 Agent 交接](/zh/guides/handoff-context-to-ai-agent/)。
 

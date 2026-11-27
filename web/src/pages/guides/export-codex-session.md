@@ -5,8 +5,8 @@ slug: "export-codex-session"
 category: "export"
 order: 1
 updated: "2026-11-27"
-title: "Export Codex Sessions to Markdown & JSON (Free Local CLI)"
-description: "Export or copy local OpenAI Codex CLI sessions from ~/.codex to Markdown, JSON, or raw JSONL in one command. Read-only, supports archived rollouts and subagents."
+title: "Export or Copy Codex Sessions to Markdown & JSON"
+description: "Export or copy local OpenAI Codex CLI sessions from ~/.codex to Markdown, JSON, or clipboard in one command. Read-only, handles archived rollouts."
 faq:
   - question: "Can I copy a Codex conversation as Markdown?"
     answer: "Yes. Export the session with agent-dump export 'codex://YOUR_SESSION_ID' --format markdown, open the printed .md file, or print directly to stdout and pipe to your clipboard (for example pbcopy on macOS)."
@@ -18,9 +18,15 @@ faq:
 
 Use Agent Dump to export local OpenAI Codex CLI sessions to Markdown, structured JSON, or raw JSONL, or pipe a transcript directly to your clipboard. Everything runs locally in read-only mode—no OpenAI API key is required and your `~/.codex` files stay untouched.
 
+```sh
+# Quick start: list Codex sessions, then export one to Markdown
+npx @agent-dump/cli list --days 30 --query 'provider:codex'
+npx @agent-dump/cli export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports
+```
+
 ## 1. Install Agent Dump
 
-Install the native CLI without Python or Node.js, or try immediately with `npx`:
+Run `brew install xingkaixin/tap/agent-dump` to install the native CLI, or run directly without installing via `npx @agent-dump/cli list --days 30 --query 'provider:codex'`:
 
 ```sh
 # macOS / Linux (Homebrew)
@@ -37,7 +43,7 @@ See [all installation options](/#install) for Scoop (Windows), `uv`, `npm`, and 
 
 ## 2. Find the session URI
 
-List Codex sessions updated in the last 30 days (including archived sessions):
+Run `agent-dump list --days 30 --query 'provider:codex'` to list active and archived Codex sessions from the last 30 days and copy a `codex://` URI:
 
 ```sh
 agent-dump list --days 30 --query 'provider:codex'
@@ -49,13 +55,13 @@ The default window is 7 days; `--days 30` widens it, and `--since` / `--until` s
 
 ## 3. Export to Markdown
 
-Replace `YOUR_SESSION_ID` with a real ID from the list:
+Run `agent-dump export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports` to save a Markdown file, or pipe `agent-dump 'codex://YOUR_SESSION_ID' | pbcopy` to copy a Codex session as Markdown:
 
 ```sh
 agent-dump export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports
 ```
 
-With `--output ./exports`, Agent Dump writes `./exports/codex/<session-id>.md` and prints the exact path. Without `--output`, files go under `./sessions/codex/`.
+Replace `YOUR_SESSION_ID` with a real ID from the list. With `--output ./exports`, Agent Dump writes `./exports/codex/<session-id>.md` and prints the exact path. Without `--output`, files go under `./sessions/codex/`.
 
 An exported Markdown transcript looks like this:
 
@@ -85,7 +91,7 @@ agent-dump 'codex://YOUR_SESSION_ID' | wl-copy
 
 ## 4. Export JSON, raw JSONL, or batch export
 
-Export structured JSON (with token totals and message parts) alongside Markdown in one command:
+Run `agent-dump export 'codex://YOUR_SESSION_ID' --format json,markdown --output ./exports` to export structured JSON (with token totals and message parts) alongside Markdown in one command:
 
 ```sh
 agent-dump export 'codex://YOUR_SESSION_ID' --format json,markdown --output ./exports

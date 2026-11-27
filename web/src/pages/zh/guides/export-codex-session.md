@@ -18,9 +18,15 @@ faq:
 
 使用 Agent Dump，可以把本机保存的 OpenAI Codex CLI 对话导出为 Markdown、结构化 JSON 或原始 JSONL，也可以直接通过管道复制到剪贴板。全部操作本地只读执行，不需要 OpenAI API Key，不会改动 `~/.codex` 中的任何文件。
 
+```sh
+# 快速开始：列出 Codex 会话并导出为 Markdown
+npx @agent-dump/cli list --days 30 --query 'provider:codex'
+npx @agent-dump/cli export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports
+```
+
 ## 1. 安装 Agent Dump
 
-推荐使用 Homebrew 或一键脚本安装原生二进制（无需 Python 或 Node.js），也可以用 `npx` 直接试跑：
+执行 `brew install xingkaixin/tap/agent-dump` 安装原生二进制（无需 Python 或 Node.js），或用 `npx @agent-dump/cli list --days 30 --query 'provider:codex'` 直接试跑：
 
 ```sh
 # macOS / Linux (Homebrew)
@@ -37,7 +43,7 @@ Windows（Scoop）、`uv`、`npm` 等其他方式见[全部安装选项](/zh/#in
 
 ## 2. 找到会话 URI
 
-列出最近 30 天有更新的 Codex 会话（包含归档会话）：
+运行 `agent-dump list --days 30 --query 'provider:codex'` 列出最近 30 天有更新的 Codex 会话（包含归档会话），复制目标条目的 `codex://` URI：
 
 ```sh
 agent-dump list --days 30 --query 'provider:codex'
@@ -49,13 +55,13 @@ agent-dump list --days 30 --query 'provider:codex'
 
 ## 3. 导出 Markdown
 
-将下面的 `YOUR_SESSION_ID` 替换为列表中的真实 ID：
+运行 `agent-dump export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports` 写出 Markdown 文件，或用 `agent-dump 'codex://YOUR_SESSION_ID' | pbcopy` 直接复制到剪贴板：
 
 ```sh
 agent-dump export 'codex://YOUR_SESSION_ID' --format markdown --output ./exports
 ```
 
-指定 `--output ./exports` 时，文件会写到 `./exports/codex/<session-id>.md` 并打印路径；不传 `--output` 时默认写到 `./sessions/codex/`。导出的 Markdown 内容格式如下：
+将上面的 `YOUR_SESSION_ID` 替换为列表中的真实 ID。指定 `--output ./exports` 时，文件会写到 `./exports/codex/<session-id>.md` 并打印路径；不传 `--output` 时默认写到 `./sessions/codex/`。导出的 Markdown 内容格式如下：
 
 ```markdown
 # Session Dump
