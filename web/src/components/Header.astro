@@ -82,7 +82,15 @@ const links = [
         <Icon name="sun" class="theme-sun" />
         <Icon name="moon" class="theme-moon" />
       </button>
-      <a class="ibtn gh" href={site.repo} aria-label="GitHub">
+      <a
+        class="ibtn gh"
+        href={site.repo}
+        aria-label="GitHub"
+        data-umami-event="outbound-click"
+        data-umami-event-destination="GitHub"
+        data-umami-event-location="header"
+        data-umami-event-locale={t.htmlLang}
+      >
         <Icon name="github" />
       </a>
       <a
@@ -111,7 +119,13 @@ const links = [
               {link.label}
             </a>
           ))}
-          <a href={site.repo}>GitHub</a>
+          <a
+            href={site.repo}
+            data-umami-event="outbound-click"
+            data-umami-event-destination="GitHub"
+            data-umami-event-location="mobile-nav"
+            data-umami-event-locale={t.htmlLang}>GitHub</a
+          >
           <a
             href={`${home}#install`}
             class="btn btn-key"

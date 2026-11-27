@@ -166,7 +166,7 @@ const outbound = [
           }
         }, 1600);
         const method = btn.dataset.installMethod;
-        if (method) trackEvent("install-copy", { method });
+        if (method) trackEvent("install-copy", { method, location: "footer" });
       } catch {
         /* clipboard unavailable */
       }

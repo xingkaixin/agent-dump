@@ -142,7 +142,7 @@ const first = methods[0];
           );
           const method = btn.dataset.installMethod;
           if (method) {
-            trackEvent("install-copy", { method });
+            trackEvent("install-copy", { method, location: "install" });
           }
         } catch {
           /* clipboard denied — leave state untouched */

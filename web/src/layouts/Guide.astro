@@ -125,6 +125,7 @@ const content = (await Astro.slots.render("default")).replace(
       <article>
         <div
           class="prose guide-content"
+          data-guide-slug={slug}
           data-copy={ui[locale].copy}
           data-copied={ui[locale].copied}
           data-copy-error={
@@ -153,6 +154,7 @@ const content = (await Astro.slots.render("default")).replace(
           class="guide-install"
           aria-labelledby="guide-install-heading"
           data-guide-install
+          data-guide-slug={slug}
           data-copy-label={ui[locale].copy}
           data-copied-label={ui[locale].copied}
         >
@@ -199,6 +201,22 @@ const content = (await Astro.slots.render("default")).replace(
               {ui[locale].copy}
             </button>
             <span role="status" aria-live="polite" class="sr-only" data-ginst-status></span>
+          </div>
+          <div class="ginst-companion">
+            <span>{t.companionPrompt}</span>
+            <a
+              class="tlink"
+              href={site.codesesh}
+              target="_blank"
+              rel="noopener"
+              data-umami-event="outbound-click"
+              data-umami-event-destination="CodeSesh"
+              data-umami-event-location="guide"
+              data-umami-event-locale={ui[locale].htmlLang}
+            >
+              {t.companionAction}
+              <Icon name="arrowUpRight" small />
+            </a>
           </div>
         </section>
         <section class="related" aria-labelledby="related-heading">
@@ -265,9 +283,19 @@ const content = (await Astro.slots.render("default")).replace(
   import { trackEvent } from "../lib/analytics";
   const content = document.querySelector<HTMLElement>(".guide-content");
   if (content) {
+    const guideSlug = content.dataset.guideSlug ?? "";
+    const nearestHeadingId = (node: Element) => {
+      let current = node.previousElementSibling;
+      while (current) {
+        if (current.tagName === "H2" && current.id) return current.id;
+        current = current.previousElementSibling;
+      }
+      return "intro";
+    };
     for (const pre of content.querySelectorAll("pre")) {
       const command = pre.querySelector("code")?.textContent;
       if (!command) continue;
+      const target = nearestHeadingId(pre);
       const wrapper = document.createElement("div");
       wrapper.className = "guide-code";
       pre.before(wrapper);
@@ -297,7 +325,10 @@ const content = (await Astro.slots.render("default")).replace(
             button.classList.remove("ok");
             status.textContent = "";
           }, 2000);
-          trackEvent("guide-copy");
+          trackEvent("guide-copy", {
+            ...(guideSlug ? { guide: guideSlug } : {}),
+            target,
+          });
         } catch {
           status.textContent = content.dataset.copyError!;
         }
@@ -306,6 +337,7 @@ const content = (await Astro.slots.render("default")).replace(
   }
 
   for (const box of document.querySelectorAll<HTMLElement>("[data-guide-install]")) {
+    const guideSlug = box.dataset.guideSlug ?? "";
     const copyLabel = box.dataset.copyLabel ?? "Copy";
     const copiedLabel = box.dataset.copiedLabel ?? "Copied";
     const tabs = [...box.querySelectorAll<HTMLButtonElement>("[data-ginst-opt]")];
@@ -350,7 +382,13 @@ const content = (await Astro.slots.render("default")).replace(
         window.clearTimeout(timer);
         timer = window.setTimeout(resetBtn, 1600);
         const method = copyBtn.dataset.installMethod;
-        if (method) trackEvent("install-copy", { method });
+        if (method) {
+          trackEvent("install-copy", {
+            method,
+            location: "guide",
+            ...(guideSlug ? { guide: guideSlug } : {}),
+          });
+        }
       } catch {
         /* clipboard unavailable */
       }
