@@ -3,7 +3,7 @@ layout: "../../../layouts/Guide.astro"
 locale: "zh"
 slug: "save-ai-conversations-to-obsidian"
 category: "export"
-order: 6
+order: 10
 updated: "2026-11-22"
 title: "把 AI 对话保存到 Obsidian 知识库"
 description: "将 Codex 和 Claude Code 对话保存为 Obsidian 中的 Markdown 笔记。使用独立导出目录，保留关键上下文，并了解归档与恢复的边界。"

@@ -3,7 +3,7 @@ layout: "../../layouts/Guide.astro"
 locale: "en"
 slug: "handoff-context-to-ai-agent"
 category: "handoff"
-order: 4
+order: 8
 updated: "2026-10-03"
 title: "Give an AI agent context from a previous session"
 description: "Continue work with context from a previous Codex or Claude Code conversation. Generate reading instructions or use bounded JSON pages with continuation cursors."

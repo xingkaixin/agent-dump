@@ -5,16 +5,24 @@
 ## Guides
 
 - [All guides](https://agent-dump.xingkaixin.me/guides/): Practical workflows and commands.
-- [中文使用说明](https://agent-dump.xingkaixin.me/zh/guides/): 六个场景的操作步骤、输出说明和限制。
+- [中文使用说明](https://agent-dump.xingkaixin.me/zh/guides/): 十个场景的操作步骤、输出说明和限制。
 - [日本語ガイド](https://agent-dump.xingkaixin.me/ja/guides/): Codex・Claude Code のエクスポート手順（日本語）と英語ガイド一覧。
 - [Export Codex sessions](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a URI, export Markdown or JSON, and copy the transcript into notes or another conversation.
 - [Export Claude Code conversations](https://agent-dump.xingkaixin.me/guides/export-claude-code-conversations/): Save one or several local conversations to Markdown, normalized JSON with token stats, or raw JSONL.
+- [Export Cursor chat history](https://agent-dump.xingkaixin.me/guides/export-cursor-chat-history/): Read and export Cursor composer sessions from globalStorage/state.vscdb to JSON or printable transcript.
+- [Export Gemini CLI sessions](https://agent-dump.xingkaixin.me/guides/export-gemini-cli-sessions/): Export local Google Gemini CLI chats and subagents from ~/.gemini/tmp to Markdown, JSON, or raw.
+- [Export OpenCode sessions](https://agent-dump.xingkaixin.me/guides/export-opencode-sessions/): Export OpenCode 1.x and 2.x SQLite sessions from opencode.db to Markdown or JSON.
+- [Export Cherry Studio conversations](https://agent-dump.xingkaixin.me/guides/export-cherry-studio-conversations/): Export Cherry Studio 2.x chats and agent sessions from cherrystudio.sqlite to Markdown or JSON.
 - [Search coding history](https://agent-dump.xingkaixin.me/guides/search-ai-coding-history/): Full-text search, project filters, message locations, and cited excerpts.
 - [Hand off context to an agent](https://agent-dump.xingkaixin.me/guides/handoff-context-to-ai-agent/): Reading prompts, bounded JSON pages, cursors, and revision handling.
 - [Create work reports](https://agent-dump.xingkaixin.me/guides/weekly-report-from-ai-sessions/): Preview scope, configure AI collect, or generate a prompt for another agent.
 - [Save to Obsidian](https://agent-dump.xingkaixin.me/guides/save-ai-conversations-to-obsidian/): Export Markdown into a vault with a dedicated output directory.
 - [将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/): 找到本地 Codex 会话 URI、导出 Markdown 或 JSON 及排查步骤。
 - [导出 Claude Code 对话](https://agent-dump.xingkaixin.me/zh/guides/export-claude-code-conversations/): 将本地 Claude Code 会话保存为 Markdown、结构化 JSON 或原始 JSONL。
+- [导出 Cursor 聊天记录](https://agent-dump.xingkaixin.me/zh/guides/export-cursor-chat-history/): 只读读取本地 Cursor state.vscdb 并导出为 JSON 或可阅读文本。
+- [导出 Gemini CLI 会话](https://agent-dump.xingkaixin.me/zh/guides/export-gemini-cli-sessions/): 将本地 ~/.gemini/tmp 中的 Gemini CLI 对话导出为 Markdown 或 JSON。
+- [导出 OpenCode 会话](https://agent-dump.xingkaixin.me/zh/guides/export-opencode-sessions/): 读取 OpenCode 1.x/2.x 数据库并导出 Markdown 或 JSON。
+- [导出 Cherry Studio 对话](https://agent-dump.xingkaixin.me/zh/guides/export-cherry-studio-conversations/): 从 cherrystudio.sqlite 导出 Cherry Studio 2.x 普通聊天与 Agent 会话。
 - [搜索 AI 编码历史](https://agent-dump.xingkaixin.me/zh/guides/search-ai-coding-history/): 全文搜索、按项目筛选、定位消息并导出带引用的上下文片段。
 - [把历史对话交给下一个 AI Agent](https://agent-dump.xingkaixin.me/zh/guides/handoff-context-to-ai-agent/): 读取提示词、有界 JSON 分页、续读游标与版本一致性。
 - [从 AI 编码会话生成日报或周报](https://agent-dump.xingkaixin.me/zh/guides/weekly-report-from-ai-sessions/): 预览范围、内置 AI 汇总或外部 Agent 提示词交接。
