@@ -7,7 +7,17 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = guideUi[locale];
-const guides = await getGuides(locale);
+const featuredSlugs = new Set([
+  "export-codex-session",
+  "export-claude-code-conversations",
+  "export-cursor-chat-history",
+  "search-ai-coding-history",
+  "handoff-context-to-ai-agent",
+  "weekly-report-from-ai-sessions",
+]);
+const guides = (await getGuides(locale)).filter((guide) =>
+  featuredSlugs.has(guide.slug),
+);
 ---
 
 <section id="guides" class="sec">
