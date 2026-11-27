@@ -465,6 +465,47 @@
 .prose h2 + * {
   margin-top: 0;
 }
+.prose h3 {
+  margin-top: 32px;
+  margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+  scroll-margin-top: 96px;
+}
+.prose h3 + * {
+  margin-top: 0;
+}
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.prose thead {
+  background: var(--panel);
+}
+.prose th,
+.prose td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.prose th {
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.prose tbody tr:last-child td {
+  border-bottom: 0;
+}
 .prose h2 .no {
   flex: none;
   display: inline-grid;
@@ -698,6 +739,18 @@
   min-width: 0;
   overflow-x: auto;
   white-space: nowrap;
+}
+.ginst-companion {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 14px;
+  color: var(--mfg);
 }
 
 .aside {

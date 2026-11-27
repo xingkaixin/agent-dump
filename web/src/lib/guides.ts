@@ -123,6 +123,8 @@ export const guideUi = {
     quickInstallTitle: "Install Agent Dump",
     quickInstallNote: "Free, open-source, read-only local CLI. Source session files are never modified.",
     allInstallOptions: "All install options",
+    companionPrompt: "Want to replay and search sessions in a Web UI?",
+    companionAction: "Try CodeSesh",
     providerGuideLabel: "Guide",
     categories: {
       export: "Export & archive",
@@ -155,6 +157,8 @@ export const guideUi = {
     quickInstallTitle: "安装 Agent Dump",
     quickInstallNote: "免费开源、本地只读 CLI，不会修改任何源会话文件。",
     allInstallOptions: "全部安装方式",
+    companionPrompt: "想在 Web UI 里回放和搜索对话？",
+    companionAction: "试试 CodeSesh",
     providerGuideLabel: "指南",
     categories: {
       export: "导出与归档",
@@ -187,6 +191,8 @@ export const guideUi = {
     quickInstallTitle: "Agent Dump をインストール",
     quickInstallNote: "無料のオープンソース CLI。ローカルの元セッションは変更しません。",
     allInstallOptions: "すべてのインストール方法",
+    companionPrompt: "Web UI でセッションを再生・検索したいですか？",
+    companionAction: "CodeSesh を試す",
     providerGuideLabel: "ガイド",
     categories: {
       export: "エクスポート",

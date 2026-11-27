@@ -187,7 +187,7 @@ const titleJoined = locale === "en" ? `${t.heroTitle} ` : t.heroTitle;
           }
         }, 1600);
         const method = btn.dataset.installMethod;
-        if (method) trackEvent("install-copy", { method });
+        if (method) trackEvent("install-copy", { method, location: "hero" });
       } catch {
         /* clipboard unavailable */
       }

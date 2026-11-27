@@ -21,6 +21,7 @@ export const site = {
     ja: "https://xingkaixin.me/en/",
   } as Record<Locale, string>,
   repo: "https://github.com/xingkaixin/agent-dump",
+  codesesh: "https://codesesh.xingkaixin.me/",
   license: "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE",
   downloadUrls: [
     "https://www.npmjs.com/package/@agent-dump/cli",

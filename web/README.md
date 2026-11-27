@@ -22,7 +22,7 @@ pnpm build
 - `web/tests/e2e` 覆盖各语言安装命令、翻译跳转不落到 404、文章与内链可访问。
 - `404.astro` 生成顶层 `404.html`，配合 `notFoundHandling: "404-page"` 让未知路径返回 404。错误页使用 `noindex`，不输出 canonical 或结构化数据。`public/_redirects` 将旧 `/sitemap.xml` 永久重定向到 `/sitemap-index.xml`；在 GSC 提交后者，部署时核对完整的 28 个可索引页面。
 - Umami 仅采集正式域名 `agent-dump.xingkaixin.me`，忽略 hash 并启用 Core Web Vitals。保留 query 以支持 UTM 来源分析。本地、CI 和 Workers 预览不计入正式流量。
-- 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具）；`guide-copy` 表示成功复制指南示例；`outbound-click` 表示点击页脚外链。事件仅记录语言、入口或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。
+- 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具，`location` 区分位置，指南页附带 `guide`）；`guide-copy` 表示成功复制指南示例（含 `guide` 与所在小节 `target`）；`outbound-click` 表示点击导航栏、指南页（如 CodeSesh）或页脚外链。事件仅记录语言、入口、指南 slug 或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。
 - Umami 历史数据按 Hostname = `agent-dump.xingkaixin.me` 筛选后再比较。观察 GSC 的非品牌查询曝光、指南点击及 Umami 的安装命令复制率，避免用含测试流量的总浏览量判断 SEO 效果。
 
 部署只使用通过 mise 全局安装并已登录的 `cf`，不在项目依赖或 `mise.toml` 中安装 cf / Wrangler。当前已验证版本为 `cf 1.0.0-rc.0`。`web/scripts/prepare-worker.mjs` 把 Astro 的 `dist/` 复制到 Cloudflare Build Output Specification v1 目录，并写入 Worker 名称、正式域名及 HTML/404 行为。生成目录 `.cloudflare/` 不提交。`cf 1.0.0-rc.0` 起拒绝旧 v0 格式；升级全局 cf 后先运行 dry run：
