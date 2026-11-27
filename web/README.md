@@ -20,7 +20,7 @@ pnpm build
 - 使用说明保存在 `web/src/pages/guides/`、`web/src/pages/zh/guides/` 和 `web/src/pages/ja/guides/` 的 Markdown 文件中。frontmatter 的 `slug`、`locale`、`category`、`order`、`updated`、`title`、`description` 驱动目录、语言切换和文章元数据；相同内容的翻译共用 slug。保留既有文章 URL。
 - 新文章同步英文和中文，更新日期必须反映实际内容修改。日文目录优先展示已有日文翻译，未翻译文章回退到英文并明确标记。正文要包含适用场景、有效命令、输出与限制，并同步 `public/llms.txt`。文章渲染为静态 HTML；筛选仅作渐进增强。
 - `web/tests/e2e` 覆盖各语言安装命令、翻译跳转不落到 404、文章与内链可访问。
-- `404.astro` 生成顶层 `404.html`，配合 `notFoundHandling: "404-page"` 让未知路径返回 404。错误页使用 `noindex`，不输出 canonical 或结构化数据。`public/_redirects` 将旧 `/sitemap.xml` 永久重定向到 `/sitemap-index.xml`；在 GSC 提交后者，部署时核对完整的 20 个可索引页面。
+- `404.astro` 生成顶层 `404.html`，配合 `notFoundHandling: "404-page"` 让未知路径返回 404。错误页使用 `noindex`，不输出 canonical 或结构化数据。`public/_redirects` 将旧 `/sitemap.xml` 永久重定向到 `/sitemap-index.xml`；在 GSC 提交后者，部署时核对完整的 28 个可索引页面。
 - Umami 仅采集正式域名 `agent-dump.xingkaixin.me`，忽略 hash 并启用 Core Web Vitals。保留 query 以支持 UTM 来源分析。本地、CI 和 Workers 预览不计入正式流量。
 - 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具）；`guide-copy` 表示成功复制指南示例；`outbound-click` 表示点击页脚外链。事件仅记录语言、入口或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。
 - Umami 历史数据按 Hostname = `agent-dump.xingkaixin.me` 筛选后再比较。观察 GSC 的非品牌查询曝光、指南点击及 Umami 的安装命令复制率，避免用含测试流量的总浏览量判断 SEO 效果。

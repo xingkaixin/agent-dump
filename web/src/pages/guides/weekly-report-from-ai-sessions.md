@@ -3,7 +3,7 @@ layout: "../../layouts/Guide.astro"
 locale: "en"
 slug: "weekly-report-from-ai-sessions"
 category: "reports"
-order: 5
+order: 9
 updated: "2026-11-24"
 title: "Weekly Work Reports from Codex & Claude Code Sessions"
 description: "Turn local Codex and Claude Code sessions into a daily or weekly work report. Preview scope with --dry-run, run AI collect, or emit an agent handoff prompt."

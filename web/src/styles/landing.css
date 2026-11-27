@@ -610,6 +610,32 @@
   width: 20px;
   height: 20px;
 }
+.ptile-linked {
+  padding: 0;
+}
+.ptile-link {
+  display: block;
+  height: 100%;
+  padding: 14px 16px 16px;
+  text-decoration: none;
+  color: inherit;
+}
+.ptile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ptile-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 600 11px/1 var(--mono);
+  color: var(--signal-ink);
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--signal-tint);
+}
 .ptile b {
   display: block;
   font-size: 14px;

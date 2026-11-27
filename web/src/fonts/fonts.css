@@ -5,7 +5,7 @@
   font-display: swap;
   font-weight: 100 900;
   src: url("./sans-core.woff2") format("woff2-variations");
-  unicode-range: U+20-7E,U+B7,U+2013-2014,U+2018-2019,U+201C-201D,U+2026,U+203A,U+2191,U+2193;
+  unicode-range: U+20-7E,U+B7,U+D7,U+2013-2014,U+2018-2019,U+201C-201D,U+2026,U+203A;
 }
 
 @font-face {
@@ -14,7 +14,7 @@
   font-display: swap;
   font-weight: 100 900;
   src: url("./sans-ext.woff2") format("woff2-variations");
-  unicode-range: U+A0-AC,U+AE-B6,U+B8-17F;
+  unicode-range: U+A0-AC,U+AE-B6,U+B8-D6,U+D8-17F;
 }
 
 @font-face {

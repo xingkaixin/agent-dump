@@ -3,7 +3,7 @@ layout: "../../layouts/Guide.astro"
 locale: "en"
 slug: "save-ai-conversations-to-obsidian"
 category: "export"
-order: 6
+order: 10
 updated: "2026-10-03"
 title: "Save AI conversations to an Obsidian vault"
 description: "Keep Codex and Claude Code conversations as Markdown notes in Obsidian. Export to a dedicated vault folder, preserve useful context, and understand archive limits."

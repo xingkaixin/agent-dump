@@ -1,5 +1,5 @@
 ---
-import { codexGuideLinks } from "../lib/guides";
+import { codexGuideLinks, guideUi, providerGuideMap } from "../lib/guides";
 import { site, ui, providers, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
 import Icon from "./Icon.astro";
@@ -10,6 +10,8 @@ interface Props {
 const { locale } = Astro.props;
 const t = ui[locale];
 const l = landing[locale];
+const guideLinks = await providerGuideMap(locale);
+const guideLabel = guideUi[locale].providerGuideLabel;
 const icons: Record<string, string> = {
   Codex: "codex",
   "Claude Code": "claudecode",
@@ -66,21 +68,48 @@ const [headLead, headTail] = t.providersHeading.split(/(?<=[，、,])\s*/);
       </figure>
     </div>
     <ul class="ptiles" data-reveal>
-      {providers.map((provider) => (
-        <li class="ptile">
-          <span class="pic">
-            <img
-              src={`/assets/agents/${icons[provider.name]}.svg`}
-              alt=""
-              width="20"
-              height="20"
-              loading="lazy"
-            />
-          </span>
-          <b>{provider.name}</b>
-          <code>{provider.example}</code>
-        </li>
-      ))}
+      {providers.map((provider) => {
+        const href = guideLinks[provider.name];
+        return (
+          <li class:list={["ptile", href && "ptile-linked"]}>
+            {href ? (
+              <a class="ptile-link" href={href}>
+                <div class="ptile-head">
+                  <span class="pic">
+                    <img
+                      src={`/assets/agents/${icons[provider.name]}.svg`}
+                      alt=""
+                      width="20"
+                      height="20"
+                      loading="lazy"
+                    />
+                  </span>
+                  <span class="ptile-guide">
+                    {guideLabel}
+                    <Icon name="arrowUpRight" small />
+                  </span>
+                </div>
+                <b>{provider.name}</b>
+                <code>{provider.example}</code>
+              </a>
+            ) : (
+              <>
+                <span class="pic">
+                  <img
+                    src={`/assets/agents/${icons[provider.name]}.svg`}
+                    alt=""
+                    width="20"
+                    height="20"
+                    loading="lazy"
+                  />
+                </span>
+                <b>{provider.name}</b>
+                <code>{provider.example}</code>
+              </>
+            )}
+          </li>
+        );
+      })}
     </ul>
   </div>
 </section>

@@ -3,7 +3,7 @@ layout: "../../../layouts/Guide.astro"
 locale: "zh"
 slug: "handoff-context-to-ai-agent"
 category: "handoff"
-order: 4
+order: 8
 updated: "2026-11-22"
 title: "给 AI Agent 交接会话上下文"
 description: "让新任务接续之前的 Codex 或 Claude Code 对话。生成读取说明，或通过带游标的 JSON 分页获取必要上下文，避免一次塞入整段历史。"

@@ -169,9 +169,9 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "en",
     ogLocale: "en_US",
     dir: "ltr",
-    title: "Export Codex & Claude Code Sessions | Agent Dump",
+    title: "Export Codex, Claude Code & Cursor Sessions | Agent Dump",
     description:
-      "Export Codex and Claude Code conversations to Markdown or JSON. Search local AI coding history and reuse context with a free, open-source CLI for 19 tools.",
+      "Free local read-only CLI to export Codex, Claude Code, Cursor, Gemini CLI, and 15+ AI coding sessions to Markdown or JSON. Full-text search, no API key needed.",
     softwareDescription:
       "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
     websiteDescription: "Find, read, export, and reuse local AI coding sessions with Agent Dump.",
@@ -184,8 +184,8 @@ export const ui: Record<Locale, UiStrings> = {
     themeLight: "Light",
     themeDark: "Dark",
     eyebrow: "Local AI session CLI",
-    heroTitle: "Your sessions.",
-    heroTitleAccent: "Still useful.",
+    heroTitle: "Search & export",
+    heroTitleAccent: "your AI sessions.",
     heroDescription:
       "Find, read, and export local sessions from Codex, Claude Code, Cursor, and 16 more tools with one URI syntax, then hand them to the next Agent. Free, open source, and it never modifies source data.",
     ctaInstall: "Install",
@@ -447,8 +447,8 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "zh-Hans",
     ogLocale: "zh_CN",
     dir: "ltr",
-    title: "Codex、Claude Code 会话导出与搜索 | Agent Dump",
-    description: "将 Codex、Claude Code 对话导出为 Markdown 或 JSON，搜索本地 AI 编码历史并复用上下文。Agent Dump 是免费开源 CLI，支持 19 款工具，源会话保持不变。",
+    title: "Codex、Claude Code、Cursor 会话导出与搜索 | Agent Dump",
+    description: "免费开源、本地只读 CLI：将 Codex、Claude Code、Cursor、Gemini CLI 等 19 款 AI 编码工具的对话导出为 Markdown 或 JSON，支持全文搜索与上下文交接。",
     softwareDescription: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
     websiteDescription: "使用 Agent Dump 查找、读取、导出和复用本地 AI 编码会话。",
     keywords:

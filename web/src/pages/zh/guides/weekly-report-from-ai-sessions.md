@@ -3,7 +3,7 @@ layout: "../../../layouts/Guide.astro"
 locale: "zh"
 slug: "weekly-report-from-ai-sessions"
 category: "reports"
-order: 5
+order: 9
 updated: "2026-11-24"
 title: "从 AI 编码会话生成日报或周报"
 description: "将保存的 AI 编码对话整理成工作报告。先确认会话范围，再选择内置 AI 汇总或提示词交接，最后检查来源覆盖和未完成项。"

@@ -4,69 +4,130 @@ locale: "zh"
 slug: "export-claude-code-conversations"
 category: "export"
 order: 2
-updated: "2026-11-22"
+updated: "2026-11-27"
 title: "将 Claude Code 对话导出为 Markdown 和 JSON"
-description: "找到本地 Claude Code 会话，将对话导出为 Markdown 或 JSON。了解输出路径、多格式导出，以及找不到项目历史时的排查方法。"
+description: "从本地 ~/.claude/projects 导出 Claude Code 会话与子代理记录为 Markdown、含 Token 统计的 JSON 或原始 JSONL。免费只读 CLI，支持批量导出。"
+faq:
+  - question: "Claude Code 的本地对话记录保存在哪里？"
+    answer: "Claude Code 默认把会话保存为 ~/.claude/projects/<project>/<session>.jsonl，子代理记录在 <session>/subagents/ 下。如果你自定义了配置目录，运行前设置 CLAUDE_CONFIG_DIR 即可。"
+  - question: "和 Claude Code 内置的 /export 或 --resume 有什么区别？"
+    answer: "内置 /export 只能逐个导出当前打开的会话，--resume 则是重新进入交互。Agent Dump 以只读方式读取所有历史会话和子代理，支持全文搜索、批量导出和带 Token 统计的归一化 JSON，并且支持跨 19 款工具统一操作。"
+  - question: "可以导出 claude.ai 网页版对话吗？"
+    answer: "不可以。Agent Dump 只读取本机保存的 Claude Code CLI 会话，不连接 claude.ai 网页账号，也不解析网页端导出的 conversations.json 压缩包。"
 ---
 
-Agent Dump 可以将本地保存的 Claude Code 对话导出成文件。Markdown 适合项目笔记和代码评审，JSON 适合后续脚本处理。导出过程不会修改 Claude Code 的原始会话记录。
+Agent Dump 可以把本机保存的 Claude Code CLI 会话导出为干净的 Markdown 或结构化 JSON 文件，不修改任何原始记录。Markdown 适合归档笔记和代码评审，JSON 适合脚本处理与 Token 统计。整个过程在本地执行，不需要 API Key。
 
-## 安装并找到对话
+> 本指南针对本地 **Claude Code CLI** 会话（`~/.claude/projects/`），不涉及 `claude.ai` 网页版数据导出。
 
-在使用 Claude Code 的那台机器上执行。如果已安装 npm 和 Node.js 22 或以上版本：
+## 安装或免安装试用
 
-```sh
-npm install -g @agent-dump/cli
-agent-dump --list --days 30 --query 'provider:claude'
-```
-
-也可以选择[原生二进制、Homebrew、Scoop 或 uv 安装](/zh/#install)。列表会筛选最近 30 天有更新的会话，包括创建得较早但最近还在使用的对话。需要按创建时间筛选时，增加 `--time-field created`。
-
-根据标题和工作目录找到目标对话，复制完整的 `claude://...` URI。只查当前项目时，在项目目录中运行：
+推荐直接安装原生二进制（无需 Python 或 Node.js），也可以用 `npx` 直接试用：
 
 ```sh
-agent-dump --list --days 30 --query 'provider:claude path:.'
+# macOS / Linux (Homebrew)
+brew install xingkaixin/tap/agent-dump
+
+# macOS / Linux (一键脚本)
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh
+
+# 或免安装直接试跑（需要 Node.js 22+）
+npx @agent-dump/cli list --days 30 --query 'provider:claude'
 ```
 
-## 导出可阅读的记录
+Windows（Scoop）、`uv`、`npm`、`bun` 等方式见[全部安装选项](/zh/#install)。请在运行过 Claude Code 的同一台机器和系统账号下执行命令。
+
+## 找到 Claude Code 会话
+
+列出最近 30 天更新过的会话，或在项目目录里只看当前项目：
+
+```sh
+agent-dump list --days 30 --query 'provider:claude'
+agent-dump list --days 30 --query 'provider:claude path:.'
+```
+
+列表会打印会话标题、工作目录和 `claude://<session-id>` URI；`<session>/subagents/` 中的子代理也会作为独立会话列出。默认按最近更新时间筛选，如需按创建时间或精确日期范围筛选，使用 `--time-field created` 或 `--since` / `--until`。
+
+## 导出为 Markdown
 
 将 `YOUR_SESSION_ID` 替换为列表中的真实会话 ID：
 
 ```sh
-agent-dump 'claude://YOUR_SESSION_ID' --format markdown --output ./exports
+agent-dump export 'claude://YOUR_SESSION_ID' --format markdown --output ./exports
 ```
 
-命令会打印保存路径。Markdown 文件位于当前工作目录下的 `./exports/claude/` 中。打开打印出的文件即可阅读。这个文件是对话记录，不会恢复原来的 Agent 进程或执行状态。
+命令会打印保存路径，默认写入 `./exports/claudecode/<session-id>.md`。导出的 Markdown 结构如下：
 
-## 同时保留结构化数据
+```markdown
+# Session Dump
 
-既需要阅读，又需要脚本处理时，可以一次生成两种格式：
+- URI: `claude://7f3c91ab`
+
+## 1. User
+
+鉴权上游超过 30s 无响应时，登录重试会一直堆积。
+
+## 2. Assistant
+
+把请求的 AbortSignal 透传进重试循环，触发超时后立即终止已取消的登录尝试。
+```
+
+导出得到的是可携带的纯文本记录，不会恢复原来的 Claude Code 进程或执行状态。
+
+## 导出结构化 JSON 或原始 JSONL
+
+一次命令可同时导出 Markdown 和归一化 JSON：
 
 ```sh
-agent-dump 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
+agent-dump export 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
 
-`--format json` 会写出归一化后的 JSON 文件，包含会话元数据（`id`、`title`、`directory`、`version`、`time_created`、`time_updated`）、汇总统计 `stats`（`total_input_tokens`、`total_output_tokens`、`total_cost`、`message_count`）以及 `messages` 数组（每条消息含 `role`、`model`、`time_created`、`tokens`、`cost` 与结构化 `parts`）。如果需要保留未加工的原始记录，可使用 `--format raw` 导出 `.raw.jsonl` 文件。
+`--format json` 会写出归一化 JSON，包含会话元数据（`id`、`title`、`directory`、`version`、`time_created`、`time_updated`）、汇总统计 `stats` 以及 `messages` 数组：
 
-`--format json` 会写出导出文件。它与 `--json` 不同，后者用于受支持的查询和读取模式，将结构化结果写到标准输出。脚本只需要长对话的一部分时，可以使用[分页读取](/zh/guides/handoff-context-to-ai-agent/)。
+```json
+{
+  "id": "7f3c91ab",
+  "title": "修复登录超时重试",
+  "directory": "/Users/dev/project",
+  "stats": {
+    "message_count": 18,
+    "total_input_tokens": 42180,
+    "total_output_tokens": 3940,
+    "total_cost": 0.19
+  },
+  "messages": [
+    {
+      "role": "user",
+      "parts": [{ "type": "text", "text": "鉴权上游超过 30s 无响应时..." }]
+    }
+  ]
+}
+```
 
-## 导出多段对话
+如需保留未加工的源文件，使用 `--format raw` 导出 `.raw.jsonl`。注意 `--format json` 是写出导出文件，与 `--json`（将查询和分页读取结果输出到标准输出）不同。若脚本只需读取长会话的一部分，请看[分页读取与 Agent 交接](/zh/guides/handoff-context-to-ai-agent/)。
 
-如果需要在终端中手动选择多个会话：
+## 在终端中浏览与批量导出
+
+想预览内容并一次导出多个 Claude Code 会话：
 
 ```sh
-agent-dump --interactive --query 'provider:claude' --format markdown --output ./exports
+agent-dump browse --days 30 --query 'provider:claude'
 ```
 
-按照终端提示选择会话。这个流程需要交互式终端；自动化导出单个会话时，直接传入 URI。
+在阅读器中按 `Space` 标记多个会话，按 `e` 批量导出。也可以直接运行 `agent-dump export --query 'provider:claude' --format markdown --output ./exports` 指定格式与输出目录后进行勾选。
 
-## 找不到历史记录时
+## 源路径与排查方法
 
-执行 `agent-dump --providers` 检查源路径是否可用，并适当增大 `--days`。确认当前操作系统账号和机器与运行 Claude Code 时一致。`path:.` 匹配记录中的工作目录，可以移除它检查是否过滤掉了目标会话。
+Agent Dump 优先读取 `CLAUDE_CONFIG_DIR`，否则读取 `~/.claude`，扫描 `projects/<project>/<session>.jsonl` 和 `<session>/subagents/`。
 
-Agent Dump 读取本地保存的历史，不能从远程账号拉取缺失内容，也不能恢复被删除的源文件。分享导出文件前，先确认其中没有不适合公开的项目信息。
+找不到历史记录时：
 
-接下来可以[跨工具搜索历史对话](/zh/guides/search-ai-coding-history/)，或[将导出结果保存到 Obsidian](/zh/guides/save-ai-conversations-to-obsidian/)。
+- 执行 `agent-dump providers`，确认检测到的 Claude Code 源路径是否可用。
+- 用 `--days 90` 或 `--since` / `--until` 扩大时间范围。
+- 去掉 `path:.`，确认是不是因为启动目录不同被过滤掉了。
+- 没有可见用户/助手消息的空会话会被自动跳过。
+
+接下来可以[跨工具搜索 AI 编码历史](/zh/guides/search-ai-coding-history/)，或[把对话保存到 Obsidian](/zh/guides/save-ai-conversations-to-obsidian/)。
 
 ## 延伸阅读
 
