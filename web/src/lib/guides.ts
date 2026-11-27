@@ -1,5 +1,10 @@
 import type { Locale } from "./i18n";
 
+export interface GuideFaq {
+  question: string;
+  answer: string;
+}
+
 export interface Guide {
   locale: Locale;
   slug: string;
@@ -8,6 +13,7 @@ export interface Guide {
   category: "export" | "search" | "handoff" | "reports";
   order: number;
   updated: string;
+  faq?: GuideFaq[];
 }
 
 function parseFrontmatter(raw: string): Guide {
@@ -15,10 +21,12 @@ function parseFrontmatter(raw: string): Guide {
   const data: Record<string, string> = {};
   if (match) {
     for (const line of match[1].split(/\r?\n/)) {
+      if (!line || /^\s/.test(line)) continue;
       const idx = line.indexOf(":");
       if (idx <= 0) continue;
       const key = line.slice(0, idx).trim();
       let value = line.slice(idx + 1).trim();
+      if (!value) continue;
       if (
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))
@@ -111,6 +119,11 @@ export const guideUi = {
     count: "{count} guides",
     found: "{count} of {total} guides",
     clear: "Clear search and filters",
+    faqHeading: "Common questions",
+    quickInstallTitle: "Install Agent Dump",
+    quickInstallNote: "Free, open-source, read-only local CLI. Source session files are never modified.",
+    allInstallOptions: "All install options",
+    providerGuideLabel: "Guide",
     categories: {
       export: "Export & archive",
       search: "Search & read",
@@ -138,6 +151,11 @@ export const guideUi = {
     count: "共 {count} 篇指南",
     found: "找到 {count} / {total} 篇指南",
     clear: "清除搜索与筛选",
+    faqHeading: "常见问题",
+    quickInstallTitle: "安装 Agent Dump",
+    quickInstallNote: "免费开源、本地只读 CLI，不会修改任何源会话文件。",
+    allInstallOptions: "全部安装方式",
+    providerGuideLabel: "指南",
     categories: {
       export: "导出与归档",
       search: "搜索与阅读",
@@ -165,6 +183,11 @@ export const guideUi = {
     count: "全 {count} 件のガイド",
     found: "{total} 件中 {count} 件のガイド",
     clear: "検索と絞り込みをクリア",
+    faqHeading: "よくある質問",
+    quickInstallTitle: "Agent Dump をインストール",
+    quickInstallNote: "無料のオープンソース CLI。ローカルの元セッションは変更しません。",
+    allInstallOptions: "すべてのインストール方法",
+    providerGuideLabel: "ガイド",
     categories: {
       export: "エクスポート",
       search: "検索と閲覧",
@@ -187,3 +210,23 @@ export const codexGuideLinks = {
     label: "Codex セッションを Markdown・JSON にエクスポート",
   },
 };
+
+export const providerGuideSlugs: Record<string, string> = {
+  Codex: "export-codex-session",
+  "Claude Code": "export-claude-code-conversations",
+  Cursor: "export-cursor-chat-history",
+  "Gemini CLI": "export-gemini-cli-sessions",
+  OpenCode: "export-opencode-sessions",
+  "Cherry Studio": "export-cherry-studio-conversations",
+};
+
+export async function providerGuideMap(locale: Locale): Promise<Record<string, string>> {
+  const guides = await getGuides(locale);
+  const bySlug = new Map(guides.map((guide) => [guide.slug, guide.href]));
+  const result: Record<string, string> = {};
+  for (const [provider, slug] of Object.entries(providerGuideSlugs)) {
+    const href = bySlug.get(slug);
+    if (href) result[provider] = href;
+  }
+  return result;
+}

@@ -424,6 +424,56 @@ mark {
   border-color: rgb(74 222 128 / 0.5);
 }
 
+/* locale suggestion banner */
+.locale-banner {
+  position: relative;
+  z-index: 35;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--fg2);
+}
+.locale-banner[hidden] {
+  display: none;
+}
+.locale-banner-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding-block: 6px;
+}
+.locale-banner-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.locale-banner-go {
+  font-weight: 600;
+  color: var(--signal-ink);
+  text-decoration: none;
+}
+.locale-banner-go:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.locale-banner-close {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--mfg);
+  font-size: 16px;
+  line-height: 1;
+}
+.locale-banner-close:hover {
+  background: var(--muted);
+  color: var(--fg);
+}
+
 /* header */
 .hdr {
   position: sticky;

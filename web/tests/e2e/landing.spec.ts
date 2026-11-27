@@ -86,14 +86,28 @@ for (const locale of locales) {
   });
 }
 
-test("browser language only redirects to translations that exist", async ({
+test("browser language suggests translations only when they exist", async ({
   browser,
 }) => {
   const context = await browser.newContext({ locale: "ja-JP" });
   const page = await context.newPage();
   await page.goto("/guides/export-codex-session/");
-  await expect(page).toHaveURL("/ja/guides/export-codex-session/");
+  await expect(page).toHaveURL("/guides/export-codex-session/");
+  const banner = page.locator("[data-locale-banner]");
+  await expect(banner).toBeVisible();
+  await expect(banner.locator("[data-locale-link]")).toHaveAttribute(
+    "href",
+    "/ja/guides/export-codex-session/",
+  );
+
   await page.goto("/guides/save-ai-conversations-to-obsidian/");
   await expect(page).toHaveURL("/guides/save-ai-conversations-to-obsidian/");
+  await expect(page.locator("[data-locale-banner]")).toBeHidden();
+
+  await page.goto("/guides/export-codex-session/");
+  await banner.locator("[data-locale-dismiss]").click();
+  await expect(banner).toBeHidden();
+  await page.reload();
+  await expect(page.locator("[data-locale-banner]")).toBeHidden();
   await context.close();
 });

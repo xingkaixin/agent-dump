@@ -37,7 +37,19 @@ const breadcrumbs = [
   { name: t.label, path: guideIndexPaths[locale] },
   { name: title, path: paths[locale]! },
 ];
-const sections = headings.filter((heading) => heading.depth === 2);
+const sections = [
+  ...headings.filter((heading) => heading.depth === 2),
+  ...(guide.faq?.length ? [{ depth: 2, slug: "faq", text: t.faqHeading }] : []),
+];
+const quickInstallMethods = [
+  { label: "Homebrew", code: "brew install xingkaixin/tap/agent-dump" },
+  {
+    label: "curl",
+    code: "curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh",
+  },
+  { label: "npx", code: "npx @agent-dump/cli list --days 30" },
+  { label: "uv", code: "uv tool install agent-dump" },
+];
 const steps = sections.flatMap((heading) => {
   const match = heading.text.match(/^(\d+)\.\s+(.+)$/);
   return match ? [{ slug: heading.slug, number: match[1], text: match[2] }] : [];
@@ -56,6 +68,7 @@ const content = (await Astro.slots.render("default")).replace(
     paths,
     article: { updated },
     breadcrumbs,
+    faq: guide.faq,
   }}
 >
   <div class="reading-progress" aria-hidden="true"></div>
@@ -123,6 +136,71 @@ const content = (await Astro.slots.render("default")).replace(
           }
           set:html={content}
         />
+        {guide.faq && guide.faq.length > 0 && (
+          <section class="guide-faq" id="faq" aria-labelledby="guide-faq-heading">
+            <h2 id="guide-faq-heading">{t.faqHeading}</h2>
+            <dl class="gfaq-list">
+              {guide.faq.map((item) => (
+                <div class="gfaq-item">
+                  <dt>{item.question}</dt>
+                  <dd>{item.answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+        <section
+          class="guide-install"
+          aria-labelledby="guide-install-heading"
+          data-guide-install
+          data-copy-label={ui[locale].copy}
+          data-copied-label={ui[locale].copied}
+        >
+          <div class="ginst-head">
+            <div>
+              <h2 id="guide-install-heading">{t.quickInstallTitle}</h2>
+              <p>{t.quickInstallNote}</p>
+            </div>
+            <a
+              class="tlink"
+              href={`${site.paths[locale]}#install`}
+              data-umami-event="install-cta"
+              data-umami-event-location="guide"
+              data-umami-event-locale={ui[locale].htmlLang}
+            >
+              {t.allInstallOptions}
+              <Icon name="arrowRight" small />
+            </a>
+          </div>
+          <div class="ginst-tabs" role="group" aria-label={t.quickInstallTitle}>
+            {quickInstallMethods.map((method, index) => (
+              <button
+                type="button"
+                class="ginst-tab"
+                aria-pressed={index === 0 ? "true" : "false"}
+                data-ginst-opt={method.label}
+                data-ginst-code={method.code}
+              >
+                {method.label}
+              </button>
+            ))}
+          </div>
+          <div class="ginst-cmd">
+            <span class="ginst-sig" aria-hidden="true">$</span>
+            <code data-ginst-display>{quickInstallMethods[0].code}</code>
+            <button
+              type="button"
+              class="cbtn"
+              data-ginst-copy
+              data-copy-text={quickInstallMethods[0].code}
+              data-install-method={quickInstallMethods[0].label}
+              aria-label={ui[locale].copy}
+            >
+              {ui[locale].copy}
+            </button>
+            <span role="status" aria-live="polite" class="sr-only" data-ginst-status></span>
+          </div>
+        </section>
         <section class="related" aria-labelledby="related-heading">
           <h2 id="related-heading">{t.related}</h2>
           <div class="relgrid">
@@ -225,5 +303,57 @@ const content = (await Astro.slots.render("default")).replace(
         }
       });
     }
+  }
+
+  for (const box of document.querySelectorAll<HTMLElement>("[data-guide-install]")) {
+    const copyLabel = box.dataset.copyLabel ?? "Copy";
+    const copiedLabel = box.dataset.copiedLabel ?? "Copied";
+    const tabs = [...box.querySelectorAll<HTMLButtonElement>("[data-ginst-opt]")];
+    const codeEl = box.querySelector<HTMLElement>("[data-ginst-display]");
+    const copyBtn = box.querySelector<HTMLButtonElement>("[data-ginst-copy]");
+    const statusEl = box.querySelector<HTMLElement>("[data-ginst-status]");
+    let timer = 0;
+
+    const resetBtn = () => {
+      if (!copyBtn) return;
+      copyBtn.textContent = copyLabel;
+      copyBtn.classList.remove("ok");
+      copyBtn.setAttribute("aria-label", copyLabel);
+      if (statusEl) statusEl.textContent = "";
+    };
+
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => {
+        const label = tab.dataset.ginstOpt ?? "";
+        const code = tab.dataset.ginstCode ?? "";
+        for (const other of tabs) {
+          other.setAttribute("aria-pressed", String(other === tab));
+        }
+        if (codeEl) codeEl.textContent = code;
+        if (copyBtn) {
+          copyBtn.dataset.copyText = code;
+          copyBtn.dataset.installMethod = label;
+          window.clearTimeout(timer);
+          resetBtn();
+        }
+      });
+    }
+
+    copyBtn?.addEventListener("click", async () => {
+      const text = copyBtn.dataset.copyText ?? "";
+      try {
+        if (!(await copyText(text))) return;
+        copyBtn.textContent = copiedLabel;
+        copyBtn.classList.add("ok");
+        copyBtn.setAttribute("aria-label", copiedLabel);
+        if (statusEl) statusEl.textContent = copiedLabel;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(resetBtn, 1600);
+        const method = copyBtn.dataset.installMethod;
+        if (method) trackEvent("install-copy", { method });
+      } catch {
+        /* clipboard unavailable */
+      }
+    });
   }
 </script>
